@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dutchie Product Search</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #e3e5e9;
+    --text: #1a1b1e;
+    --text-muted: #6b7280;
+    --accent: #16805a;
+    --accent-text: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1e2126;
+      --border: #2c2f36;
+      --text: #f1f2f4;
+      --text-muted: #9aa0a8;
+      --accent: #2fbf83;
+      --accent-text: #0b0c0d;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+  }
+  h1 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 8px;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  input[type="text"], select, input[type="number"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+  }
+  #q { flex: 1 1 260px; min-width: 200px; }
+  select { min-width: 140px; }
+  .price-range { display: flex; align-items: center; gap: 6px; }
+  .price-range input { width: 80px; }
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px 24px 60px;
+  }
+  .status {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s ease;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background: var(--bg);
+  }
+  .card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .card-name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .card-brand { font-size: 12px; color: var(--text-muted); }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+  .card-added { font-size: 11px; color: var(--text-muted); }
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .card-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; }
+  .card-price { font-size: 16px; font-weight: 700; color: var(--accent); }
+  .card-dispensary { font-size: 11px; color: var(--text-muted); text-align: right; max-width: 55%; }
+  .load-more {
+    display: block;
+    margin: 28px auto 0;
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .load-more:hover { border-color: var(--accent); }
+  .empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 60px 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dutchie Product Search<span class="meta" id="meta"></span></h1>
+  <div class="controls">
+    <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
+    <select id="type"><option value="">All types</option></select>
+    <select id="dispensary"><option value="">All dispensaries</option></select>
+    <div class="price-range">
+      <input type="number" id="minPrice" placeholder="Min $" min="0">
+      <span>&ndash;</span>
+      <input type="number" id="maxPrice" placeholder="Max $" min="0">
+    </div>
+    <select id="sort">
+      <option value="relevance">Best match</option>
+      <option value="newest">Newest first</option>
+      <option value="price_asc">Price: low to high</option>
+      <option value="price_desc">Price: high to low</option>
+      <option value="name_asc">Name: A-Z</option>
+    </select>
+  </div>
+</header>
+<main>
+  <div class="status" id="status"></div>
+  <div class="grid" id="grid"></div>
+  <button class="load-more" id="loadMore" hidden>Load more</button>
+</main>
+
+<script>
+const state = { page: 1, pageSize: 30, total: 0, results: [] };
+let debounceTimer = null;
+
+const el = id => document.getElementById(id);
+
+async function loadFilters() {
+  const res = await fetch('/api/filters');
+  const data = await res.json();
+  for (const t of data.types) {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    el('type').appendChild(opt);
+  }
+  for (const d of data.dispensaries) {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    el('dispensary').appendChild(opt);
+  }
+}
+
+async function loadMeta() {
+  const res = await fetch('/api/meta');
+  const data = await res.json();
+  if (data.row_count) {
+    el('meta').textContent = `${data.row_count.toLocaleString()} products - imported ${data.imported_at}`;
+  }
+}
+
+function buildQuery(page) {
+  const params = new URLSearchParams();
+  if (el('q').value.trim()) params.set('q', el('q').value.trim());
+  if (el('type').value) params.set('product_type', el('type').value);
+  if (el('dispensary').value) params.set('dispensary', el('dispensary').value);
+  if (el('minPrice').value) params.set('min_price', el('minPrice').value);
+  if (el('maxPrice').value) params.set('max_price', el('maxPrice').value);
+  params.set('sort', el('sort').value);
+  params.set('page', page);
+  params.set('page_size', state.pageSize);
+  return params.toString();
+}
+
+function cardHTML(p) {
+  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.thc_display]
+    .filter(Boolean)
+    .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
+    .join('');
+  return `
+    <a class="card" href="${escapeAttr(p.dispensary_url)}" target="_blank" rel="noopener">
+      <img src="${escapeAttr(p.image_url)}" alt="${escapeAttr(p.name)}" loading="lazy"
+           onerror="this.style.opacity=0.3">
+      <div class="card-body">
+        <div class="card-name">${escapeHtml(p.name)}</div>
+        ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
+        <div class="card-tags">${tags}</div>
+        ${p.created_at ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
+        <div class="card-footer">
+          <div class="card-price">$${p.price.toFixed(2)}</div>
+          <div class="card-dispensary">${escapeHtml(p.dispensary_display)}</div>
+        </div>
+      </div>
+    </a>`;
+}
+
+function formatDate(isoString) {
+  const d = new Date(isoString.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return isoString;
+  const now = new Date();
+  const days = Math.floor((now - d) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+async function runSearch(page = 1, append = false) {
+  el('status').textContent = 'Searching...';
+  const res = await fetch('/api/search?' + buildQuery(page));
+  const data = await res.json();
+  state.page = data.page;
+  state.total = data.total;
+
+  const grid = el('grid');
+  if (!append) grid.innerHTML = '';
+
+  if (data.results.length === 0 && !append) {
+    grid.innerHTML = '<div class="empty">No products match those filters.</div>';
+  } else {
+    grid.insertAdjacentHTML('beforeend', data.results.map(cardHTML).join(''));
+  }
+
+  const shown = (append ? grid.querySelectorAll('.card').length : data.results.length);
+  el('status').textContent = `${data.total.toLocaleString()} products found` +
+    (data.total ? ` - showing ${shown.toLocaleString()}` : '');
+
+  el('loadMore').hidden = shown >= data.total;
+}
+
+function debouncedSearch() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => runSearch(1, false), 250);
+}
+
+el('q').addEventListener('input', debouncedSearch);
+for (const id of ['type', 'dispensary', 'sort']) {
+  el(id).addEventListener('change', () => runSearch(1, false));
+}
+for (const id of ['minPrice', 'maxPrice']) {
+  el(id).addEventListener('change', () => runSearch(1, false));
+}
+el('loadMore').addEventListener('click', () => runSearch(state.page + 1, true));
+
+loadFilters();
+loadMeta();
+runSearch(1, false);
+</script>
+</body>
+</html>

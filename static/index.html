@@ -130,6 +130,103 @@
     color: var(--text-muted);
     padding: 60px 0;
   }
+  .btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn[aria-expanded="true"] { border-color: var(--accent); }
+  .btn .pill {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 18px;
+    padding: 1px 6px;
+    text-align: center;
+  }
+  .btn .btn-value { color: var(--text-muted); }
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 40;
+  }
+  .modal {
+    position: fixed;
+    z-index: 50;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(420px, calc(100vw - 32px));
+    max-height: min(80vh, 640px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+  .modal h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal .close {
+    background: none;
+    border: 0;
+    color: var(--text-muted);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+  .modal .close:hover { color: var(--text); }
+  .field { display: block; margin-bottom: 14px; }
+  .field span {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .field select { width: 100%; }
+  .modal-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .opt:hover { border-color: var(--accent); }
+  .opt[aria-checked="true"] {
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .opt[aria-checked="true"]::after { content: " ✓"; color: var(--accent); }
   .reason {
     display: inline-block;
     font-size: 11px;
@@ -151,17 +248,46 @@
   <h1>Dutchie Product Search<span class="meta" id="meta"></span></h1>
   <div class="controls">
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
-    <select id="type"><option value="">All types</option></select>
-    <select id="dispensary"><option value="">All dispensaries</option></select>
-    <select id="sort">
-      <option value="newest" selected>Newest first</option>
-      <option value="relevance">Best match</option>
-      <option value="price_asc">Price: low to high</option>
-      <option value="price_desc">Price: high to low</option>
-      <option value="name_asc">Name: A-Z</option>
-    </select>
+    <button class="btn" id="filterBtn" aria-haspopup="dialog" aria-expanded="false">
+      Filters<span class="pill" id="filterCount" hidden></span>
+    </button>
+    <button class="btn" id="sortBtn" aria-haspopup="dialog" aria-expanded="false">
+      Sort<span class="btn-value" id="sortLabel">Newest first</span>
+    </button>
   </div>
 </header>
+
+<div class="backdrop" id="backdrop" hidden></div>
+
+<div class="modal" id="filterModal" role="dialog" aria-modal="true" aria-labelledby="filterTitle" hidden>
+  <h2 id="filterTitle">Filters <button class="close" data-close aria-label="Close">&times;</button></h2>
+  <label class="field">
+    <span>Product type</span>
+    <select id="type"><option value="">All types</option></select>
+  </label>
+  <label class="field">
+    <span>Dispensary</span>
+    <select id="dispensary"><option value="">All dispensaries</option></select>
+  </label>
+  <div class="modal-footer">
+    <button class="btn" id="filterReset">Clear all</button>
+    <button class="btn" data-close>Done</button>
+  </div>
+</div>
+
+<div class="modal" id="sortModal" role="dialog" aria-modal="true" aria-labelledby="sortTitle" hidden>
+  <h2 id="sortTitle">Sort by <button class="close" data-close aria-label="Close">&times;</button></h2>
+  <div id="sortOptions" role="radiogroup" aria-labelledby="sortTitle"></div>
+  <!-- Source of truth for the chosen sort; the buttons above drive it so the
+       rest of the page (buildQuery) is unchanged. -->
+  <select id="sort" hidden>
+    <option value="newest" selected>Newest first</option>
+    <option value="relevance">Best match</option>
+    <option value="price_asc">Price: low to high</option>
+    <option value="price_desc">Price: high to low</option>
+    <option value="name_asc">Name: A-Z</option>
+  </select>
+</div>
 <main>
   <div class="status" id="status"></div>
   <div class="grid" id="grid"></div>
@@ -291,12 +417,88 @@ function debouncedSearch() {
   debounceTimer = setTimeout(() => runSearch(1, false), 250);
 }
 
+/* ---- Filter / sort panels ---- */
+
+let openModal = null;
+
+function closeModal() {
+  if (!openModal) return;
+  el(openModal.modal).hidden = true;
+  el('backdrop').hidden = true;
+  const btn = el(openModal.button);
+  btn.setAttribute('aria-expanded', 'false');
+  btn.focus();
+  openModal = null;
+}
+
+function showModal(modal, button) {
+  if (openModal) closeModal();
+  openModal = { modal, button };
+  el('backdrop').hidden = false;
+  el(modal).hidden = false;
+  el(button).setAttribute('aria-expanded', 'true');
+  // Focus the first control so the panel is keyboard-usable.
+  const first = el(modal).querySelector('select, button:not(.close)');
+  if (first) first.focus();
+}
+
+/** Reflect active filters on the button, so state is visible when closed. */
+function updateFilterButton() {
+  const active = ['type', 'dispensary'].filter(id => el(id).value).length;
+  const badge = el('filterCount');
+  badge.hidden = active === 0;
+  badge.textContent = active;
+}
+
+function updateSortButton() {
+  const sel = el('sort');
+  el('sortLabel').textContent = sel.options[sel.selectedIndex].textContent;
+  for (const b of el('sortOptions').querySelectorAll('.opt')) {
+    b.setAttribute('aria-checked', String(b.dataset.value === sel.value));
+  }
+}
+
+function buildSortOptions() {
+  el('sortOptions').innerHTML = Array.from(el('sort').options).map(o => `
+    <button class="opt" role="radio" data-value="${escapeAttr(o.value)}"
+            aria-checked="${o.selected}">${escapeHtml(o.textContent)}</button>`).join('');
+  for (const b of el('sortOptions').querySelectorAll('.opt')) {
+    b.addEventListener('click', () => {
+      el('sort').value = b.dataset.value;
+      updateSortButton();
+      closeModal();
+      runSearch(1, false);
+    });
+  }
+}
+
+el('filterBtn').addEventListener('click', () => showModal('filterModal', 'filterBtn'));
+el('sortBtn').addEventListener('click', () => showModal('sortModal', 'sortBtn'));
+el('backdrop').addEventListener('click', closeModal);
+for (const b of document.querySelectorAll('[data-close]')) {
+  b.addEventListener('click', closeModal);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+el('filterReset').addEventListener('click', () => {
+  el('type').value = '';
+  el('dispensary').value = '';
+  updateFilterButton();
+  runSearch(1, false);
+});
+
 el('q').addEventListener('input', debouncedSearch);
-for (const id of ['type', 'dispensary', 'sort']) {
-  el(id).addEventListener('change', () => runSearch(1, false));
+for (const id of ['type', 'dispensary']) {
+  el(id).addEventListener('change', () => {
+    updateFilterButton();
+    runSearch(1, false);
+  });
 }
 el('loadMore').addEventListener('click', () => runSearch(state.page + 1, true));
 
+buildSortOptions();
+updateSortButton();
+updateFilterButton();
 loadFilters();
 loadMeta();
 runSearch(1, false);

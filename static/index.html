@@ -131,12 +131,16 @@
     padding: 60px 0;
   }
   /* Keeps Filters and Sort side by side: the pair wraps as a unit under the
-     search box on narrow screens rather than the two splitting across lines. */
+     search box on narrow screens rather than the two splitting across lines.
+     Two equal columns rather than flex, so both buttons take the width of the
+     wider one ("Sort  Newest first") instead of hugging their own text. */
   .btn-group {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     flex: 0 0 auto;
   }
+  .btn-group .btn { justify-content: center; }
   .btn {
     padding: 8px 14px;
     border-radius: 8px;
@@ -327,8 +331,10 @@ async function loadFilters() {
 async function loadMeta() {
   const res = await fetch('/api/meta');
   const data = await res.json();
-  if (data.row_count) {
-    el('meta').textContent = `${data.row_count.toLocaleString()} products - imported ${data.imported_at}`;
+  // Deliberately no product count here — the status line under the controls
+  // already reports it, and that one reflects the active filters.
+  if (data.imported_at) {
+    el('meta').textContent = `imported ${data.imported_at}`;
   }
 }
 

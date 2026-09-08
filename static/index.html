@@ -69,8 +69,6 @@
   }
   #q { flex: 1 1 260px; min-width: 200px; }
   select { min-width: 140px; }
-  .price-range { display: flex; align-items: center; gap: 6px; }
-  .price-range input { width: 80px; }
   main {
     max-width: 1400px;
     margin: 0 auto;
@@ -99,12 +97,6 @@
     transition: transform 0.12s ease;
   }
   .card:hover { transform: translateY(-2px); }
-  .card img {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    background: var(--bg);
-  }
   .card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .card-name { font-size: 14px; font-weight: 600; line-height: 1.3; }
   .card-brand { font-size: 12px; color: var(--text-muted); }
@@ -138,6 +130,20 @@
     color: var(--text-muted);
     padding: 60px 0;
   }
+  .reason {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+  .reason-returned    { border-color: #3b82f6; color: #3b82f6; }
+  .reason-new_listing { border-color: #22c55e; color: #22c55e; }
+  .reason-new_package { border-color: #a855f7; color: #a855f7; }
+  .reason-quantity_up { border-color: #f59e0b; color: #f59e0b; }
+  .card-change { font-size: 12px; color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -147,14 +153,9 @@
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
     <select id="type"><option value="">All types</option></select>
     <select id="dispensary"><option value="">All dispensaries</option></select>
-    <div class="price-range">
-      <input type="number" id="minPrice" placeholder="Min $" min="0">
-      <span>&ndash;</span>
-      <input type="number" id="maxPrice" placeholder="Max $" min="0">
-    </div>
     <select id="sort">
+      <option value="newest" selected>Newest first</option>
       <option value="relevance">Best match</option>
-      <option value="newest">Newest first</option>
       <option value="price_asc">Price: low to high</option>
       <option value="price_desc">Price: high to low</option>
       <option value="name_asc">Name: A-Z</option>
@@ -201,12 +202,28 @@ function buildQuery(page) {
   if (el('q').value.trim()) params.set('q', el('q').value.trim());
   if (el('type').value) params.set('product_type', el('type').value);
   if (el('dispensary').value) params.set('dispensary', el('dispensary').value);
-  if (el('minPrice').value) params.set('min_price', el('minPrice').value);
-  if (el('maxPrice').value) params.set('max_price', el('maxPrice').value);
   params.set('sort', el('sort').value);
   params.set('page', page);
   params.set('page_size', state.pageSize);
   return params.toString();
+}
+
+/* How a product changed in the latest scrape, if at all. Set by
+   /api/search from the restock_events table; absent for most products. */
+const REASONS = {
+  returned:    { label: 'Restocked',   hint: 'was off the shelf in the previous scrape, back now' },
+  new_listing: { label: 'Brand new',   hint: 'first time this product has been listed' },
+  new_package: { label: 'New package', hint: 'same listing, new package on the shelf' },
+  quantity_up: { label: 'More stock',  hint: 'more units on hand than the previous scrape' },
+};
+
+function restockBadge(p) {
+  const meta = REASONS[p.restock_reason];
+  if (!meta) return '';
+  const detail = p.restock_reason === 'quantity_up'
+    ? ` ${p.restock_prev_quantity ?? '?'}→${p.restock_quantity ?? '?'}`
+    : '';
+  return `<div><span class="reason reason-${p.restock_reason}" title="${escapeAttr(meta.hint)}">${escapeHtml(meta.label)}${detail}</span></div>`;
 }
 
 function cardHTML(p) {
@@ -216,9 +233,8 @@ function cardHTML(p) {
     .join('');
   return `
     <a class="card" href="${escapeAttr(p.dispensary_url)}" target="_blank" rel="noopener">
-      <img src="${escapeAttr(p.image_url)}" alt="${escapeAttr(p.name)}" loading="lazy"
-           onerror="this.style.opacity=0.3">
       <div class="card-body">
+        ${restockBadge(p)}
         <div class="card-name">${escapeHtml(p.name)}</div>
         ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
         <div class="card-tags">${tags}</div>
@@ -277,9 +293,6 @@ function debouncedSearch() {
 
 el('q').addEventListener('input', debouncedSearch);
 for (const id of ['type', 'dispensary', 'sort']) {
-  el(id).addEventListener('change', () => runSearch(1, false));
-}
-for (const id of ['minPrice', 'maxPrice']) {
   el(id).addEventListener('change', () => runSearch(1, false));
 }
 el('loadMore').addEventListener('click', () => runSearch(state.page + 1, true));

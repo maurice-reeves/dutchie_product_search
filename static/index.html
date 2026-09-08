@@ -130,6 +130,13 @@
     color: var(--text-muted);
     padding: 60px 0;
   }
+  /* Keeps Filters and Sort side by side: the pair wraps as a unit under the
+     search box on narrow screens rather than the two splitting across lines. */
+  .btn-group {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
   .btn {
     padding: 8px 14px;
     border-radius: 8px;
@@ -248,18 +255,20 @@
   <h1>Dutchie Product Search<span class="meta" id="meta"></span></h1>
   <div class="controls">
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
-    <button class="btn" id="filterBtn" aria-haspopup="dialog" aria-expanded="false">
-      Filters<span class="pill" id="filterCount" hidden></span>
-    </button>
-    <button class="btn" id="sortBtn" aria-haspopup="dialog" aria-expanded="false">
-      Sort<span class="btn-value" id="sortLabel">Newest first</span>
-    </button>
+    <div class="btn-group">
+      <button class="btn" id="filterBtn" aria-haspopup="dialog" aria-expanded="false">
+        Filters<span class="pill" id="filterCount" hidden></span>
+      </button>
+      <button class="btn" id="sortBtn" aria-haspopup="dialog" aria-expanded="false">
+        Sort<span class="btn-value" id="sortLabel">Newest first</span>
+      </button>
+    </div>
   </div>
 </header>
 
 <div class="backdrop" id="backdrop" hidden></div>
 
-<div class="modal" id="filterModal" role="dialog" aria-modal="true" aria-labelledby="filterTitle" hidden>
+<div class="modal" id="filterModal" role="dialog" aria-modal="true" aria-labelledby="filterTitle" tabindex="-1" hidden>
   <h2 id="filterTitle">Filters <button class="close" data-close aria-label="Close">&times;</button></h2>
   <label class="field">
     <span>Product type</span>
@@ -275,7 +284,7 @@
   </div>
 </div>
 
-<div class="modal" id="sortModal" role="dialog" aria-modal="true" aria-labelledby="sortTitle" hidden>
+<div class="modal" id="sortModal" role="dialog" aria-modal="true" aria-labelledby="sortTitle" tabindex="-1" hidden>
   <h2 id="sortTitle">Sort by <button class="close" data-close aria-label="Close">&times;</button></h2>
   <div id="sortOptions" role="radiogroup" aria-labelledby="sortTitle"></div>
   <!-- Source of truth for the chosen sort; the buttons above drive it so the
@@ -437,9 +446,11 @@ function showModal(modal, button) {
   el('backdrop').hidden = false;
   el(modal).hidden = false;
   el(button).setAttribute('aria-expanded', 'true');
-  // Focus the first control so the panel is keyboard-usable.
-  const first = el(modal).querySelector('select, button:not(.close)');
-  if (first) first.focus();
+  // Focus the panel itself, not the first control: focusing a <select> pops
+  // its native menu open the moment the panel appears. The panel is
+  // tabindex="-1" so it can take focus without entering the tab order, which
+  // still lets Escape and tabbing into the controls work.
+  el(modal).focus();
 }
 
 /** Reflect active filters on the button, so state is visible when closed. */

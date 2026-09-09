@@ -370,7 +370,7 @@ function restockBadge(p) {
 }
 
 function cardHTML(p) {
-  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.thc_display]
+  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.weight_label, p.thc_display]
     .filter(Boolean)
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join('');

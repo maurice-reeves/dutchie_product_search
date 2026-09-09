@@ -23,8 +23,18 @@ DB_PATH = PROJECT_ROOT / "data" / "products.db"
 # dispensary) and can be 100MB+, so there's no reason to load the rest.
 USE_COLUMNS = [
     "Name", "Image", "Prices", "brand_name", "type", "subcategory",
-    "strainType", "weight", "THCContent_range", "dispensary", "url",
+    "strainType", "THCContent_range", "dispensary", "url",
     "cName", "scrapeDate", "createdAt",
+    # Weight. The bare `weight` column is not usable: it reads 1000 for a 3.5g
+    # flower, a 3g pre-roll pack and a 100mg drink alike, and agrees with the
+    # real net weight only 56.9% of the time. `measurements_netWeight_values`
+    # is a list in milligrams (measurements_netWeight_unit is always
+    # MILLIGRAMS), and `Options` carries the label Dutchie shows shoppers
+    # ("3.5g", "1/8oz"), which covers slightly more rows.
+    "measurements_netWeight_values", "Options",
+    # THC figures are not all milligrams — 23,192 rows are PERCENTAGE — so the
+    # unit has to travel with the value.
+    "THCContent_unit",
     # Restock tracking. `id` is Dutchie's product id and is what lets us follow
     # a product across daily snapshots (the `id` column in the products table is
     # just a synthetic rowid for FTS). `createdAt` never changes, so it cannot
@@ -72,8 +82,20 @@ def dispensary_slug(raw: str) -> str:
     return raw.split("/products")[0].strip("/")
 
 
-def clean_thc(raw) -> str:
-    """"[100]" -> "100mg", "[10, 20]" -> "10-20mg" """
+THC_UNIT_SUFFIX = {
+    "PERCENTAGE": "%",
+    "MILLIGRAMS": "mg",
+    "MILLIGRAMS_PER_GRAM": "mg/g",
+}
+
+
+def clean_thc(raw, unit=None) -> str:
+    """"[100]" + MILLIGRAMS -> "100mg"; "[24.3]" + PERCENTAGE -> "24.3%".
+
+    The unit matters: most rows are PERCENTAGE, and assuming milligrams
+    rendered a 24.3%-THC flower as "24.3mg". An unrecognised or missing unit
+    yields a bare number rather than a guessed one.
+    """
     if not isinstance(raw, str) or not raw.strip():
         return ""
     try:
@@ -85,9 +107,33 @@ def clean_thc(raw) -> str:
     nums = [v for v in values if v is not None]
     if not nums:
         return ""
+    suffix = THC_UNIT_SUFFIX.get(unit, "")
     if len(nums) == 1:
-        return f"{nums[0]}mg"
-    return f"{min(nums)}-{max(nums)}mg"
+        return f"{nums[0]}{suffix}"
+    return f"{min(nums)}-{max(nums)}{suffix}"
+
+
+def first_in_list(raw):
+    """"[3500]" -> 3500, "['3.5g']" -> "3.5g", "[]" or blank -> None."""
+    if isinstance(raw, (int, float)):
+        return None if pd.isna(raw) else raw
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        values = ast.literal_eval(raw)
+    except (ValueError, SyntaxError):
+        return raw.strip() or None
+    if isinstance(values, (list, tuple)):
+        return values[0] if values else None
+    return values
+
+
+def format_mg(mg) -> str:
+    """3500 -> '3.5g', 100 -> '100mg'. Used only when Options has no label."""
+    if mg is None or pd.isna(mg):
+        return ""
+    mg = float(mg)
+    return f"{mg / 1000:g}g" if mg >= 1000 else f"{mg:g}mg"
 
 
 def product_level(out: pd.DataFrame) -> pd.DataFrame:
@@ -216,7 +262,25 @@ def build_database(csv_path: Path) -> None:
 
     df["dispensary_display"] = df["dispensary"].apply(clean_dispensary_name)
     df["dispensary_slug"] = df["dispensary"].apply(dispensary_slug)
-    df["thc_display"] = df["THCContent_range"].apply(clean_thc)
+    df["thc_display"] = [
+        clean_thc(v, u) for v, u in zip(df["THCContent_range"], df["THCContent_unit"])
+    ]
+
+    # Net weight in milligrams, numeric so it can be sorted/filtered on. Zero
+    # means "not reported" here, not a zero-weight product.
+    df["weight_mg"] = pd.to_numeric(
+        df["measurements_netWeight_values"].apply(first_in_list), errors="coerce"
+    )
+    df.loc[df["weight_mg"] <= 0, "weight_mg"] = None
+
+    # Display label, preferring Dutchie's own ("3.5g", "1/8oz") and falling
+    # back to formatting the milligram figure.
+    option_labels = df["Options"].apply(first_in_list)
+    df["weight_label"] = [
+        str(label) if label is not None and str(label).strip().upper() not in ("", "N/A")
+        else format_mg(mg)
+        for label, mg in zip(option_labels, df["weight_mg"])
+    ]
     df["brand_name"] = df["brand_name"].fillna("")
     df["type"] = df["type"].fillna("Uncategorized")
     df["subcategory"] = df["subcategory"].fillna("")
@@ -242,7 +306,7 @@ def build_database(csv_path: Path) -> None:
         "strainType": "strain_type",
     })[[
         "product_id", "name", "image_url", "price", "brand_name", "product_type",
-        "product_subcategory", "strain_type", "weight", "thc_display",
+        "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
         "dispensary_display", "dispensary_slug", "dispensary_url",
         "product_slug", "scrape_date", "created_at", "updated_at",
         "quantity_available", "package_id",

@@ -415,7 +415,7 @@ function cardHTML(p) {
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join('');
   return `
-    <a class="card" href="${escapeAttr(p.dispensary_url)}" target="_blank" rel="noopener">
+    <a class="card" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">
       <div class="card-body">
         ${restockBadge(p)}
         <div class="card-name">${escapeHtml(p.name)}</div>

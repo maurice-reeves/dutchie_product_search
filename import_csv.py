@@ -286,6 +286,20 @@ def build_database(csv_path: Path) -> None:
     df["subcategory"] = df["subcategory"].fillna("")
     df["strainType"] = df["strainType"].fillna("")
 
+    # Direct link to the product on the dispensary's own Dutchie menu.
+    # Verified against the live site: the singular /product/<cName> resolves
+    # (page title reads "<product> at <dispensary> | Dutchie") while the plural
+    # /products/<cName> does not. Falls back to the dispensary menu when the
+    # slug is missing, so a card always links somewhere useful.
+    slug = df["cName"].astype("string").str.strip()
+    dispensary_menu = df["dispensary"].apply(dispensary_slug)
+    df["product_url"] = [
+        f"https://dutchie.com/dispensary/{d}/product/{s}"
+        if isinstance(s, str) and s and isinstance(d, str) and d
+        else f"https://dutchie.com/dispensary/{d}/products"
+        for d, s in zip(dispensary_menu, slug)
+    ]
+
     df["quantity_available"] = pd.to_numeric(
         df.get("POSMetaData_children_quantityAvailable"), errors="coerce"
     )
@@ -307,7 +321,7 @@ def build_database(csv_path: Path) -> None:
     })[[
         "product_id", "name", "image_url", "price", "brand_name", "product_type",
         "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
-        "dispensary_display", "dispensary_slug", "dispensary_url",
+        "dispensary_display", "dispensary_slug", "dispensary_url", "product_url",
         "product_slug", "scrape_date", "created_at", "updated_at",
         "quantity_available", "package_id",
     ]]

@@ -67,7 +67,9 @@
     padding: 9px 12px;
     font-size: 14px;
   }
-  #q { flex: 1 1 260px; min-width: 200px; }
+  /* Search box and the button pair each take a full row, so the two buttons
+     together span exactly the width of the search bar. */
+  #q { flex: 1 1 100%; min-width: 0; }
   select { min-width: 140px; }
   main {
     max-width: 1400px;
@@ -138,7 +140,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    flex: 0 0 auto;
+    flex: 1 1 100%;
   }
   .btn-group .btn { justify-content: center; }
   .btn {

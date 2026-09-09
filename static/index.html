@@ -219,24 +219,6 @@
     margin-bottom: 6px;
   }
   .field select { width: 100%; }
-  .check {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .check:hover { border-color: var(--accent); }
-  .check input { margin-top: 2px; accent-color: var(--accent); }
-  .check small {
-    display: block;
-    color: var(--text-muted);
-    font-size: 12px;
-    margin-top: 2px;
-  }
   .modal-footer {
     display: flex;
     justify-content: space-between;
@@ -306,9 +288,13 @@
     <span>Dispensary</span>
     <select id="dispensary"><option value="">All dispensaries</option></select>
   </label>
-  <label class="check">
-    <input type="checkbox" id="restockedOnly">
-    <span>Back on the shelf only<small>restocked, repackaged or newly listed in the latest scrape</small></span>
+  <label class="field">
+    <span>Brand</span>
+    <select id="brand"><option value="">All brands</option></select>
+  </label>
+  <label class="field">
+    <span>Weight</span>
+    <select id="weight"><option value="">All weights</option></select>
   </label>
   <div class="modal-footer">
     <button class="btn" id="filterReset">Clear all</button>
@@ -354,6 +340,18 @@ async function loadFilters() {
     opt.value = d; opt.textContent = d;
     el('dispensary').appendChild(opt);
   }
+  // Brands are alphabetical; weights arrive already ordered by real size
+  // (the server parses the label), so keep the order the API gave us.
+  for (const b of data.brands || []) {
+    const opt = document.createElement('option');
+    opt.value = b; opt.textContent = b;
+    el('brand').appendChild(opt);
+  }
+  for (const w of data.weights || []) {
+    const opt = document.createElement('option');
+    opt.value = w; opt.textContent = w;
+    el('weight').appendChild(opt);
+  }
 }
 
 async function loadMeta() {
@@ -371,7 +369,8 @@ function buildQuery(page) {
   if (el('q').value.trim()) params.set('q', el('q').value.trim());
   if (el('type').value) params.set('product_type', el('type').value);
   if (el('dispensary').value) params.set('dispensary', el('dispensary').value);
-  if (el('restockedOnly').checked) params.set('restocked_only', 'true');
+  if (el('brand').value) params.set('brand', el('brand').value);
+  if (el('weight').value) params.set('weight', el('weight').value);
   params.set('sort', el('sort').value);
   params.set('page', page);
   params.set('page_size', state.pageSize);
@@ -493,8 +492,7 @@ function showModal(modal, button) {
 
 /** Reflect active filters on the button, so state is visible when closed. */
 function updateFilterButton() {
-  const active = ['type', 'dispensary'].filter(id => el(id).value).length
-              + (el('restockedOnly').checked ? 1 : 0);
+  const active = ['type', 'dispensary', 'brand', 'weight'].filter(id => el(id).value).length;
   const badge = el('filterCount');
   badge.hidden = active === 0;
   badge.textContent = active;
@@ -533,13 +531,14 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 el('filterReset').addEventListener('click', () => {
   el('type').value = '';
   el('dispensary').value = '';
-  el('restockedOnly').checked = false;
+  el('brand').value = '';
+  el('weight').value = '';
   updateFilterButton();
   runSearch(1, false);
 });
 
 el('q').addEventListener('input', debouncedSearch);
-for (const id of ['type', 'dispensary', 'restockedOnly']) {
+for (const id of ['type', 'dispensary', 'brand', 'weight']) {
   el(id).addEventListener('change', () => {
     updateFilterButton();
     runSearch(1, false);

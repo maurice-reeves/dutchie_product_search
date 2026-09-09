@@ -4,6 +4,7 @@ Run with:
     ./.venv/bin/uvicorn app:app --reload --port 8000
 Then open http://127.0.0.1:8000
 """
+import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -34,6 +35,30 @@ def meta():
         conn.close()
 
 
+_WEIGHT_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?|\d+/\d+)\s*(g|mg|oz|lb)\s*$", re.I)
+_WEIGHT_IN_MG = {"mg": 1.0, "g": 1000.0, "oz": 28349.5, "lb": 453592.0}
+
+
+def weight_sort_key(label: str):
+    """Order weight labels by actual size rather than alphabetically.
+
+    Parsed from the label itself, not the weight_mg column: the two disagree
+    (weight_mg for a "1g" row can read 1), because the label is per option
+    while the milligram figure is per row. Labels that aren't weights at all
+    ("single", "5pack") sort last, alphabetically among themselves.
+    """
+    m = _WEIGHT_PATTERN.match(label or "")
+    if not m:
+        return (1, 0.0, (label or "").lower())
+    amount, unit = m.group(1), m.group(2).lower()
+    if "/" in amount:
+        num, den = amount.split("/")
+        value = float(num) / float(den)
+    else:
+        value = float(amount)
+    return (0, value * _WEIGHT_IN_MG[unit], "")
+
+
 @app.get("/api/filters")
 def filters():
     conn = get_conn()
@@ -44,10 +69,22 @@ def filters():
         dispensaries = [r[0] for r in conn.execute(
             "SELECT DISTINCT dispensary_display FROM products ORDER BY dispensary_display"
         )]
+        brands = [r[0] for r in conn.execute(
+            "SELECT DISTINCT brand_name FROM products "
+            "WHERE brand_name != '' ORDER BY brand_name COLLATE NOCASE"
+        )]
+        weights = sorted(
+            (r[0] for r in conn.execute(
+                "SELECT DISTINCT weight_label FROM products WHERE weight_label != ''"
+            )),
+            key=weight_sort_key,
+        )
         price_row = conn.execute("SELECT MIN(price), MAX(price) FROM products").fetchone()
         return {
             "types": types,
             "dispensaries": dispensaries,
+            "brands": brands,
+            "weights": weights,
             "min_price": price_row[0],
             "max_price": price_row[1],
         }
@@ -102,7 +139,8 @@ def search(
     q: str = Query("", description="Free-text search over name/brand/dispensary"),
     product_type: Optional[str] = None,
     dispensary: Optional[str] = None,
-    restocked_only: bool = Query(False, description="Only products flagged in the latest scrape"),
+    brand: Optional[str] = None,
+    weight: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|name_asc|newest)$"),
@@ -114,42 +152,43 @@ def search(
         where = []
         params: list = []
 
+        # Every column is qualified with `products.`: the relevance branch
+        # joins products_fts, which has its own name / brand_name /
+        # dispensary_display columns, so a bare reference is ambiguous and
+        # SQLite rejects the whole query.
         if q.strip():
-            where.append("id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)")
+            where.append(
+                "products.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)"
+            )
             params.append(f'"{q.strip()}"*')
 
-        if restocked_only and conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='restock_events'"
-        ).fetchone():
-            # Matched on both columns: the same product at a different
-            # dispensary is a separate listing and may not have changed.
-            where.append(
-                "EXISTS (SELECT 1 FROM restock_events re "
-                "WHERE re.product_id = products.product_id "
-                "AND re.dispensary_slug = products.dispensary_slug)"
-            )
-
         if product_type:
-            where.append("product_type = ?")
+            where.append("products.product_type = ?")
             params.append(product_type)
         if dispensary:
-            where.append("dispensary_display = ?")
+            where.append("products.dispensary_display = ?")
             params.append(dispensary)
+        if brand:
+            where.append("products.brand_name = ?")
+            params.append(brand)
+        if weight:
+            where.append("products.weight_label = ?")
+            params.append(weight)
         if min_price is not None:
-            where.append("price >= ?")
+            where.append("products.price >= ?")
             params.append(min_price)
         if max_price is not None:
-            where.append("price <= ?")
+            where.append("products.price <= ?")
             params.append(max_price)
 
         where_clause = f"WHERE {' AND '.join(where)}" if where else ""
 
         order = {
-            "relevance": "id" if not q.strip() else "rank",
-            "price_asc": "price ASC",
-            "price_desc": "price DESC",
-            "name_asc": "name ASC",
-            "newest": "created_at DESC",
+            "relevance": "products.id" if not q.strip() else "rank",
+            "price_asc": "products.price ASC",
+            "price_desc": "products.price DESC",
+            "name_asc": "products.name ASC",
+            "newest": "products.created_at DESC",
         }[sort]
 
         if q.strip() and sort == "relevance":

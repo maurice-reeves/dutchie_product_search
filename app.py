@@ -102,6 +102,7 @@ def search(
     q: str = Query("", description="Free-text search over name/brand/dispensary"),
     product_type: Optional[str] = None,
     dispensary: Optional[str] = None,
+    restocked_only: bool = Query(False, description="Only products flagged in the latest scrape"),
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|name_asc|newest)$"),
@@ -116,6 +117,17 @@ def search(
         if q.strip():
             where.append("id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)")
             params.append(f'"{q.strip()}"*')
+
+        if restocked_only and conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='restock_events'"
+        ).fetchone():
+            # Matched on both columns: the same product at a different
+            # dispensary is a separate listing and may not have changed.
+            where.append(
+                "EXISTS (SELECT 1 FROM restock_events re "
+                "WHERE re.product_id = products.product_id "
+                "AND re.dispensary_slug = products.dispensary_slug)"
+            )
 
         if product_type:
             where.append("product_type = ?")

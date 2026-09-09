@@ -47,15 +47,16 @@
     padding: 16px 24px;
   }
   h1 {
-    margin: 0 0 12px;
+    margin: 0 0 4px;
     font-size: 20px;
     font-weight: 700;
   }
+  /* Its own line under the heading rather than trailing the title. */
   .meta {
     font-size: 12px;
     color: var(--text-muted);
     font-weight: 400;
-    margin-left: 8px;
+    margin-bottom: 12px;
   }
   .controls {
     display: flex;
@@ -269,7 +270,8 @@
 </head>
 <body>
 <header>
-  <h1>Dutchie Product Search<span class="meta" id="meta"></span></h1>
+  <h1>Dutchie Product Search</h1>
+  <div class="meta" id="meta"></div>
   <div class="controls">
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
     <div class="btn-group">
@@ -370,7 +372,7 @@ async function loadMeta() {
   // Deliberately no product count here — the status line under the controls
   // already reports it, and that one reflects the active filters.
   if (data.imported_at) {
-    el('meta').textContent = `imported ${data.imported_at}`;
+    el('meta').textContent = `Refreshed ${data.imported_at}`;
   }
 }
 

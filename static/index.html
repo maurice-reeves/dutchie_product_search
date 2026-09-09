@@ -50,12 +50,15 @@
     margin: 0 0 12px;
     font-size: 20px;
     font-weight: 700;
+    text-align: center;
   }
+  /* Sits at the foot of the results, just above Load more. */
   .meta {
     font-size: 12px;
     color: var(--text-muted);
     font-weight: 400;
-    margin-left: 8px;
+    text-align: center;
+    margin-top: 28px;
   }
   .controls {
     display: flex;
@@ -121,7 +124,7 @@
   .card-dispensary { font-size: 11px; color: var(--text-muted); text-align: right; max-width: 55%; }
   .load-more {
     display: block;
-    margin: 28px auto 0;
+    margin: 14px auto 0;
     padding: 10px 22px;
     border-radius: 8px;
     border: 1px solid var(--border);
@@ -219,24 +222,13 @@
     margin-bottom: 6px;
   }
   .field select { width: 100%; }
-  .check {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
+  .field select[multiple] {
+    height: auto;
+    min-height: 132px;
+    padding: 4px;
   }
-  .check:hover { border-color: var(--accent); }
-  .check input { margin-top: 2px; accent-color: var(--accent); }
-  .check small {
-    display: block;
-    color: var(--text-muted);
-    font-size: 12px;
-    margin-top: 2px;
-  }
+  .field select[multiple] option { padding: 5px 8px; border-radius: 4px; }
+  .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block; }
   .modal-footer {
     display: flex;
     justify-content: space-between;
@@ -280,7 +272,7 @@
 </head>
 <body>
 <header>
-  <h1>Dutchie Product Search<span class="meta" id="meta"></span></h1>
+  <h1>Dutchie Product Search</h1>
   <div class="controls">
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
     <div class="btn-group">
@@ -300,15 +292,19 @@
   <h2 id="filterTitle">Filters <button class="close" data-close aria-label="Close">&times;</button></h2>
   <label class="field">
     <span>Product type</span>
-    <select id="type"><option value="">All types</option></select>
+    <select id="type" multiple size="6"></select>
   </label>
   <label class="field">
     <span>Dispensary</span>
-    <select id="dispensary"><option value="">All dispensaries</option></select>
+    <select id="dispensary" multiple size="6"></select>
   </label>
-  <label class="check">
-    <input type="checkbox" id="restockedOnly">
-    <span>Back on the shelf only<small>restocked, repackaged or newly listed in the latest scrape</small></span>
+  <label class="field">
+    <span>Brand</span>
+    <select id="brand" multiple size="6"></select>
+  </label>
+  <label class="field">
+    <span>Weight</span>
+    <select id="weight" multiple size="6"></select>
   </label>
   <div class="modal-footer">
     <button class="btn" id="filterReset">Clear all</button>
@@ -332,6 +328,7 @@
 <main>
   <div class="status" id="status"></div>
   <div class="grid" id="grid"></div>
+  <div class="meta" id="meta"></div>
   <button class="load-more" id="loadMore" hidden>Load more</button>
 </main>
 
@@ -341,19 +338,34 @@ let debounceTimer = null;
 
 const el = id => document.getElementById(id);
 
+const FILTER_IDS = ['type', 'dispensary', 'brand', 'weight'];
+const FILTER_PARAM = { type: 'product_type', dispensary: 'dispensary', brand: 'brand', weight: 'weight' };
+const FILTER_KEY = { type: 'types', dispensary: 'dispensaries', brand: 'brands', weight: 'weights' };
+
+function selected(id) {
+  return Array.from(el(id).selectedOptions).map(o => o.value).filter(Boolean);
+}
+
+/** Repopulate one select, keeping the current picks selected and present. */
+function fillSelect(id, values) {
+  const keep = selected(id);
+  // A chosen value that the other filters exclude must stay in the list,
+  // otherwise there is no way to unpick it.
+  const options = values.slice();
+  for (const v of keep) if (!options.includes(v)) options.push(v);
+  el(id).innerHTML = options
+    .map(v => `<option value="${escapeAttr(v)}"${keep.includes(v) ? ' selected' : ''}>${escapeHtml(v)}</option>`)
+    .join('');
+}
+
 async function loadFilters() {
-  const res = await fetch('/api/filters');
+  const params = new URLSearchParams();
+  if (el('q').value.trim()) params.set('q', el('q').value.trim());
+  for (const id of FILTER_IDS) for (const v of selected(id)) params.append(FILTER_PARAM[id], v);
+  const res = await fetch('/api/filters?' + params.toString());
   const data = await res.json();
-  for (const t of data.types) {
-    const opt = document.createElement('option');
-    opt.value = t; opt.textContent = t;
-    el('type').appendChild(opt);
-  }
-  for (const d of data.dispensaries) {
-    const opt = document.createElement('option');
-    opt.value = d; opt.textContent = d;
-    el('dispensary').appendChild(opt);
-  }
+  for (const id of FILTER_IDS) fillSelect(id, data[FILTER_KEY[id]] || []);
+  return data;
 }
 
 async function loadMeta() {
@@ -362,16 +374,14 @@ async function loadMeta() {
   // Deliberately no product count here — the status line under the controls
   // already reports it, and that one reflects the active filters.
   if (data.imported_at) {
-    el('meta').textContent = `imported ${data.imported_at}`;
+    el('meta').textContent = `Refreshed ${data.imported_at}`;
   }
 }
 
 function buildQuery(page) {
   const params = new URLSearchParams();
   if (el('q').value.trim()) params.set('q', el('q').value.trim());
-  if (el('type').value) params.set('product_type', el('type').value);
-  if (el('dispensary').value) params.set('dispensary', el('dispensary').value);
-  if (el('restockedOnly').checked) params.set('restocked_only', 'true');
+  for (const id of FILTER_IDS) for (const v of selected(id)) params.append(FILTER_PARAM[id], v);
   params.set('sort', el('sort').value);
   params.set('page', page);
   params.set('page_size', state.pageSize);
@@ -405,7 +415,7 @@ function cardHTML(p) {
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join('');
   return `
-    <a class="card" href="${escapeAttr(p.dispensary_url)}" target="_blank" rel="noopener">
+    <a class="card" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">
       <div class="card-body">
         ${restockBadge(p)}
         <div class="card-name">${escapeHtml(p.name)}</div>
@@ -461,7 +471,7 @@ async function runSearch(page = 1, append = false) {
 
 function debouncedSearch() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => runSearch(1, false), 250);
+  debounceTimer = setTimeout(() => { loadFilters(); runSearch(1, false); }, 250);
 }
 
 /* ---- Filter / sort panels ---- */
@@ -493,8 +503,7 @@ function showModal(modal, button) {
 
 /** Reflect active filters on the button, so state is visible when closed. */
 function updateFilterButton() {
-  const active = ['type', 'dispensary'].filter(id => el(id).value).length
-              + (el('restockedOnly').checked ? 1 : 0);
+  const active = FILTER_IDS.reduce((n, id) => n + selected(id).length, 0);
   const badge = el('filterCount');
   badge.hidden = active === 0;
   badge.textContent = active;
@@ -531,17 +540,19 @@ for (const b of document.querySelectorAll('[data-close]')) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 el('filterReset').addEventListener('click', () => {
-  el('type').value = '';
-  el('dispensary').value = '';
-  el('restockedOnly').checked = false;
+  for (const id of FILTER_IDS) {
+    for (const o of el(id).options) o.selected = false;
+  }
   updateFilterButton();
+  loadFilters();
   runSearch(1, false);
 });
 
 el('q').addEventListener('input', debouncedSearch);
-for (const id of ['type', 'dispensary', 'restockedOnly']) {
+for (const id of FILTER_IDS) {
   el(id).addEventListener('change', () => {
     updateFilterButton();
+    loadFilters();          // re-narrow the other lists to what is still reachable
     runSearch(1, false);
   });
 }

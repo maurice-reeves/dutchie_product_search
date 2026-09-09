@@ -55,11 +55,54 @@ def filters():
         conn.close()
 
 
+def attach_restock_flags(conn: sqlite3.Connection, results: list) -> None:
+    """Tag each result with how it changed in the latest scrape, if at all.
+
+    Done as a second lookup over just the page of results rather than a JOIN in
+    the search query: `restock_events` shares a dozen column names with
+    `products` (name, price, dispensary_display, ...), so joining would make
+    every reference in the WHERE clause ambiguous for no real gain.
+
+    Adds `restock_reason` (and the quantity pair for "more stock") to each row.
+    Absent table or no match simply leaves the fields off.
+    """
+    if not results:
+        return
+    exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='restock_events'"
+    ).fetchone()
+    if not exists:
+        return
+
+    ids = sorted({r["product_id"] for r in results if r.get("product_id")})
+    if not ids:
+        return
+
+    placeholders = ",".join("?" * len(ids))
+    lookup = {
+        (r["product_id"], r["dispensary_slug"]): r
+        for r in conn.execute(
+            f"""SELECT product_id, dispensary_slug, reason, prev_quantity, quantity
+                FROM restock_events WHERE product_id IN ({placeholders})""",
+            ids,
+        )
+    }
+    for row in results:
+        hit = lookup.get((row.get("product_id"), row.get("dispensary_slug")))
+        if not hit:
+            continue
+        row["restock_reason"] = hit["reason"]
+        if hit["reason"] == "quantity_up":
+            row["restock_prev_quantity"] = hit["prev_quantity"]
+            row["restock_quantity"] = hit["quantity"]
+
+
 @app.get("/api/search")
 def search(
     q: str = Query("", description="Free-text search over name/brand/dispensary"),
     product_type: Optional[str] = None,
     dispensary: Optional[str] = None,
+    restocked_only: bool = Query(False, description="Only products flagged in the latest scrape"),
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|name_asc|newest)$"),
@@ -74,6 +117,17 @@ def search(
         if q.strip():
             where.append("id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)")
             params.append(f'"{q.strip()}"*')
+
+        if restocked_only and conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='restock_events'"
+        ).fetchone():
+            # Matched on both columns: the same product at a different
+            # dispensary is a separate listing and may not have changed.
+            where.append(
+                "EXISTS (SELECT 1 FROM restock_events re "
+                "WHERE re.product_id = products.product_id "
+                "AND re.dispensary_slug = products.dispensary_slug)"
+            )
 
         if product_type:
             where.append("product_type = ?")
@@ -121,6 +175,8 @@ def search(
             d = dict(r)
             d.pop("rank", None)
             results.append(d)
+
+        attach_restock_flags(conn, results)
 
         return JSONResponse({
             "results": results,

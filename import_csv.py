@@ -23,9 +23,36 @@ DB_PATH = PROJECT_ROOT / "data" / "products.db"
 # dispensary) and can be 100MB+, so there's no reason to load the rest.
 USE_COLUMNS = [
     "Name", "Image", "Prices", "brand_name", "type", "subcategory",
-    "strainType", "weight", "THCContent_range", "dispensary", "url",
+    "strainType", "THCContent_range", "dispensary", "url",
     "cName", "scrapeDate", "createdAt",
+    # Weight. The bare `weight` column is not usable: it reads 1000 for a 3.5g
+    # flower, a 3g pre-roll pack and a 100mg drink alike, and agrees with the
+    # real net weight only 56.9% of the time. `measurements_netWeight_values`
+    # is a list in milligrams (measurements_netWeight_unit is always
+    # MILLIGRAMS), and `Options` carries the label Dutchie shows shoppers
+    # ("3.5g", "1/8oz"), which covers slightly more rows.
+    "measurements_netWeight_values", "Options",
+    # THC figures are not all milligrams — 23,192 rows are PERCENTAGE — so the
+    # unit has to travel with the value.
+    "THCContent_unit",
+    # Restock tracking. `id` is Dutchie's product id and is what lets us follow
+    # a product across daily snapshots (the `id` column in the products table is
+    # just a synthetic rowid for FTS). `createdAt` never changes, so it cannot
+    # detect a restock on its own -- the signals that do are a product
+    # reappearing after being absent, and canonicalPackageId changing (a new
+    # physical package on the shelf).
+    "id", "updatedAt",
+    "POSMetaData_canonicalPackageId",
+    "POSMetaData_children_quantityAvailable",
 ]
+
+# How many days of per-product snapshots to retain. 50k products/day, so 30
+# days is ~1.5M rows -- trivial for SQLite and plenty for week-over-week views.
+SNAPSHOT_RETENTION_DAYS = 30
+
+# A product that reappears with a createdAt newer than this many days is
+# treated as genuinely new rather than restocked.
+NEW_PRODUCT_WINDOW_DAYS = 2
 
 
 def find_latest_csv() -> Path:
@@ -55,8 +82,20 @@ def dispensary_slug(raw: str) -> str:
     return raw.split("/products")[0].strip("/")
 
 
-def clean_thc(raw) -> str:
-    """"[100]" -> "100mg", "[10, 20]" -> "10-20mg" """
+THC_UNIT_SUFFIX = {
+    "PERCENTAGE": "%",
+    "MILLIGRAMS": "mg",
+    "MILLIGRAMS_PER_GRAM": "mg/g",
+}
+
+
+def clean_thc(raw, unit=None) -> str:
+    """"[100]" + MILLIGRAMS -> "100mg"; "[24.3]" + PERCENTAGE -> "24.3%".
+
+    The unit matters: most rows are PERCENTAGE, and assuming milligrams
+    rendered a 24.3%-THC flower as "24.3mg". An unrecognised or missing unit
+    yields a bare number rather than a guessed one.
+    """
     if not isinstance(raw, str) or not raw.strip():
         return ""
     try:
@@ -68,9 +107,145 @@ def clean_thc(raw) -> str:
     nums = [v for v in values if v is not None]
     if not nums:
         return ""
+    suffix = THC_UNIT_SUFFIX.get(unit, "")
     if len(nums) == 1:
-        return f"{nums[0]}mg"
-    return f"{min(nums)}-{max(nums)}mg"
+        return f"{nums[0]}{suffix}"
+    return f"{min(nums)}-{max(nums)}{suffix}"
+
+
+def first_in_list(raw):
+    """"[3500]" -> 3500, "['3.5g']" -> "3.5g", "[]" or blank -> None."""
+    if isinstance(raw, (int, float)):
+        return None if pd.isna(raw) else raw
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        values = ast.literal_eval(raw)
+    except (ValueError, SyntaxError):
+        return raw.strip() or None
+    if isinstance(values, (list, tuple)):
+        return values[0] if values else None
+    return values
+
+
+def format_mg(mg) -> str:
+    """3500 -> '3.5g', 100 -> '100mg'. Used only when Options has no label."""
+    if mg is None or pd.isna(mg):
+        return ""
+    mg = float(mg)
+    return f"{mg / 1000:g}g" if mg >= 1000 else f"{mg:g}mg"
+
+
+def product_level(out: pd.DataFrame) -> pd.DataFrame:
+    """Collapse to one row per (product_id, dispensary_slug).
+
+    The scraper explodes ``POSMetaData_children``, so a product sold in three
+    weights appears three times. Quantity is taken as the **max** across those
+    options (the product is on the shelf if any option is) and price as the
+    min, which is what a shopper would see as the "from" price.
+    """
+    have_id = out[out["product_id"].notna() & (out["product_id"].astype(str) != "")]
+    return have_id.groupby(["product_id", "dispensary_slug"], as_index=False).agg(
+        quantity=("quantity_available", "max"),
+        package_id=("package_id", "first"),
+        name=("name", "first"),
+        brand_name=("brand_name", "first"),
+        price=("price", "min"),
+        product_type=("product_type", "first"),
+        dispensary_display=("dispensary_display", "first"),
+        dispensary_url=("dispensary_url", "first"),
+        image_url=("image_url", "first"),
+        created_at=("created_at", "first"),
+        scrape_date=("scrape_date", "first"),
+    )
+
+
+def ensure_snapshot_schema(conn: sqlite3.Connection) -> None:
+    """Snapshot history survives the products table being replaced each import."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS product_snapshots (
+            product_id      TEXT NOT NULL,
+            dispensary_slug TEXT NOT NULL,
+            scrape_date     TEXT NOT NULL,
+            quantity        REAL,
+            package_id      TEXT,
+            PRIMARY KEY (product_id, dispensary_slug, scrape_date)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_date ON product_snapshots(scrape_date)"
+    )
+
+
+def compute_restocks(conn: sqlite3.Connection, today: str, snap: pd.DataFrame) -> pd.DataFrame:
+    """Classify what landed on shelves today, versus the previous snapshot.
+
+    Only dispensaries scraped on **both** days are considered. Coverage varies
+    run to run (a dispensary that fails to parse simply vanishes), and without
+    this restriction its entire catalogue looks like it restocked overnight --
+    on the 7th->8th comparison that nearly doubled the apparent count.
+
+    Reasons, in priority order:
+      returned    -- absent yesterday, back today, with an old createdAt
+      new_listing -- absent yesterday, back today, createdAt within the window
+      new_package -- same listing, different canonicalPackageId (new package)
+      quantity_up -- same listing and package, more units on hand
+    """
+    row = conn.execute(
+        "SELECT MAX(scrape_date) FROM product_snapshots WHERE scrape_date < ?", (today,)
+    ).fetchone()
+    prev_date = row[0] if row else None
+    if not prev_date:
+        print("No earlier snapshot to compare against — skipping restock detection.")
+        return pd.DataFrame()
+
+    prev = pd.read_sql(
+        "SELECT product_id, dispensary_slug, quantity, package_id "
+        "FROM product_snapshots WHERE scrape_date = ?",
+        conn, params=(prev_date,),
+    )
+
+    shared = set(prev["dispensary_slug"]) & set(snap["dispensary_slug"])
+    p = prev[prev["dispensary_slug"].isin(shared)]
+    s = snap[snap["dispensary_slug"].isin(shared)]
+    print(
+        f"Comparing against {prev_date}: {len(shared)} dispensaries covered both days "
+        f"({len(set(snap['dispensary_slug']) - shared)} only today, "
+        f"{len(set(prev['dispensary_slug']) - shared)} only then)"
+    )
+
+    merged = s.merge(
+        p.rename(columns={"quantity": "prev_quantity", "package_id": "prev_package_id"}),
+        on=["product_id", "dispensary_slug"], how="left", indicator=True,
+    )
+
+    appeared = merged["_merge"] == "left_only"
+    cutoff = pd.Timestamp(today) - pd.Timedelta(days=NEW_PRODUCT_WINDOW_DAYS)
+    genuinely_new = appeared & (merged["created_at"] >= cutoff)
+
+    both = merged["_merge"] == "both"
+    pkg_changed = (
+        both
+        & merged["package_id"].notna() & merged["prev_package_id"].notna()
+        & (merged["package_id"].astype(str) != merged["prev_package_id"].astype(str))
+    )
+    qty_up = both & (merged["quantity"] > merged["prev_quantity"])
+
+    merged["reason"] = None
+    merged.loc[qty_up, "reason"] = "quantity_up"
+    merged.loc[pkg_changed, "reason"] = "new_package"
+    merged.loc[appeared, "reason"] = "returned"
+    merged.loc[genuinely_new, "reason"] = "new_listing"
+
+    events = merged[merged["reason"].notna()].copy()
+    events["scrape_date"] = today
+    events["prev_scrape_date"] = prev_date
+    return events[[
+        "product_id", "name", "brand_name", "price", "product_type", "image_url",
+        "dispensary_display", "dispensary_slug", "dispensary_url",
+        "created_at", "scrape_date", "prev_scrape_date", "reason",
+        "prev_quantity", "quantity", "prev_package_id", "package_id",
+    ]]
 
 
 def build_database(csv_path: Path) -> None:
@@ -87,11 +262,38 @@ def build_database(csv_path: Path) -> None:
 
     df["dispensary_display"] = df["dispensary"].apply(clean_dispensary_name)
     df["dispensary_slug"] = df["dispensary"].apply(dispensary_slug)
-    df["thc_display"] = df["THCContent_range"].apply(clean_thc)
+    df["thc_display"] = [
+        clean_thc(v, u) for v, u in zip(df["THCContent_range"], df["THCContent_unit"])
+    ]
+
+    # Net weight in milligrams, numeric so it can be sorted/filtered on. Zero
+    # means "not reported" here, not a zero-weight product.
+    df["weight_mg"] = pd.to_numeric(
+        df["measurements_netWeight_values"].apply(first_in_list), errors="coerce"
+    )
+    df.loc[df["weight_mg"] <= 0, "weight_mg"] = None
+
+    # Display label, preferring Dutchie's own ("3.5g", "1/8oz") and falling
+    # back to formatting the milligram figure.
+    option_labels = df["Options"].apply(first_in_list)
+    df["weight_label"] = [
+        str(label) if label is not None and str(label).strip().upper() not in ("", "N/A")
+        else format_mg(mg)
+        for label, mg in zip(option_labels, df["weight_mg"])
+    ]
     df["brand_name"] = df["brand_name"].fillna("")
     df["type"] = df["type"].fillna("Uncategorized")
     df["subcategory"] = df["subcategory"].fillna("")
     df["strainType"] = df["strainType"].fillna("")
+
+    df["quantity_available"] = pd.to_numeric(
+        df.get("POSMetaData_children_quantityAvailable"), errors="coerce"
+    )
+    # Package ids are opaque identifiers that happen to look numeric ("00866246"),
+    # so keep them as strings -- leading zeros are significant.
+    df["package_id"] = df.get("POSMetaData_canonicalPackageId").astype("string")
+    df["product_id"] = df["id"].astype("string")
+    df["updated_at"] = pd.to_datetime(df["updatedAt"], errors="coerce", utc=True)
 
     out = df.rename(columns={
         "Name": "name",
@@ -103,10 +305,11 @@ def build_database(csv_path: Path) -> None:
         "subcategory": "product_subcategory",
         "strainType": "strain_type",
     })[[
-        "name", "image_url", "price", "brand_name", "product_type",
-        "product_subcategory", "strain_type", "weight", "thc_display",
+        "product_id", "name", "image_url", "price", "brand_name", "product_type",
+        "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
         "dispensary_display", "dispensary_slug", "dispensary_url",
-        "product_slug", "scrape_date", "created_at",
+        "product_slug", "scrape_date", "created_at", "updated_at",
+        "quantity_available", "package_id",
     ]]
 
     print(f"{len(out):,} rows have both a name, image, and parseable price")
@@ -143,11 +346,46 @@ def build_database(csv_path: Path) -> None:
             "INSERT INTO import_meta VALUES (?, ?, datetime('now'))",
             (str(csv_path), len(out)),
         )
+
+        # --- restock tracking -------------------------------------------------
+        ensure_snapshot_schema(conn)
+        snap = product_level(out)
+        today = str(out["scrape_date"].max())
+
+        events = compute_restocks(conn, today, snap)
+
+        # Written after the comparison, so re-running the import for the same
+        # day is idempotent: today's rows are replaced, and the "previous"
+        # snapshot is still whichever date came before.
+        conn.execute("DELETE FROM product_snapshots WHERE scrape_date = ?", (today,))
+        snap.assign(scrape_date=today)[
+            ["product_id", "dispensary_slug", "scrape_date", "quantity", "package_id"]
+        ].to_sql("product_snapshots", conn, if_exists="append", index=False)
+
+        cutoff = (pd.Timestamp(today) - pd.Timedelta(days=SNAPSHOT_RETENTION_DAYS)).date()
+        pruned = conn.execute(
+            "DELETE FROM product_snapshots WHERE scrape_date < ?", (str(cutoff),)
+        ).rowcount
+
+        events.to_sql("restock_events", conn, if_exists="replace", index=False)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_restock_reason ON restock_events(reason)"
+        )
+        # /api/search looks events up by product per page of results.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_restock_product "
+            "ON restock_events(product_id, dispensary_slug)"
+        )
         conn.commit()
     finally:
         conn.close()
 
     print(f"Wrote {DB_PATH} ({len(out):,} products)")
+    print(f"Snapshot recorded for {today}: {len(snap):,} products"
+          + (f", pruned {pruned:,} rows older than {SNAPSHOT_RETENTION_DAYS} days" if pruned > 0 else ""))
+    if not events.empty:
+        counts = events["reason"].value_counts()
+        print("Restock events: " + ", ".join(f"{n:,} {r}" for r, n in counts.items()))
 
 
 if __name__ == "__main__":

@@ -219,6 +219,13 @@
     margin-bottom: 6px;
   }
   .field select { width: 100%; }
+  .field select[multiple] {
+    height: auto;
+    min-height: 132px;
+    padding: 4px;
+  }
+  .field select[multiple] option { padding: 5px 8px; border-radius: 4px; }
+  .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block; }
   .modal-footer {
     display: flex;
     justify-content: space-between;
@@ -282,19 +289,19 @@
   <h2 id="filterTitle">Filters <button class="close" data-close aria-label="Close">&times;</button></h2>
   <label class="field">
     <span>Product type</span>
-    <select id="type"><option value="">All types</option></select>
+    <select id="type" multiple size="6"></select>
   </label>
   <label class="field">
     <span>Dispensary</span>
-    <select id="dispensary"><option value="">All dispensaries</option></select>
+    <select id="dispensary" multiple size="6"></select>
   </label>
   <label class="field">
     <span>Brand</span>
-    <select id="brand"><option value="">All brands</option></select>
+    <select id="brand" multiple size="6"></select>
   </label>
   <label class="field">
     <span>Weight</span>
-    <select id="weight"><option value="">All weights</option></select>
+    <select id="weight" multiple size="6"></select>
   </label>
   <div class="modal-footer">
     <button class="btn" id="filterReset">Clear all</button>
@@ -327,31 +334,34 @@ let debounceTimer = null;
 
 const el = id => document.getElementById(id);
 
+const FILTER_IDS = ['type', 'dispensary', 'brand', 'weight'];
+const FILTER_PARAM = { type: 'product_type', dispensary: 'dispensary', brand: 'brand', weight: 'weight' };
+const FILTER_KEY = { type: 'types', dispensary: 'dispensaries', brand: 'brands', weight: 'weights' };
+
+function selected(id) {
+  return Array.from(el(id).selectedOptions).map(o => o.value).filter(Boolean);
+}
+
+/** Repopulate one select, keeping the current picks selected and present. */
+function fillSelect(id, values) {
+  const keep = selected(id);
+  // A chosen value that the other filters exclude must stay in the list,
+  // otherwise there is no way to unpick it.
+  const options = values.slice();
+  for (const v of keep) if (!options.includes(v)) options.push(v);
+  el(id).innerHTML = options
+    .map(v => `<option value="${escapeAttr(v)}"${keep.includes(v) ? ' selected' : ''}>${escapeHtml(v)}</option>`)
+    .join('');
+}
+
 async function loadFilters() {
-  const res = await fetch('/api/filters');
+  const params = new URLSearchParams();
+  if (el('q').value.trim()) params.set('q', el('q').value.trim());
+  for (const id of FILTER_IDS) for (const v of selected(id)) params.append(FILTER_PARAM[id], v);
+  const res = await fetch('/api/filters?' + params.toString());
   const data = await res.json();
-  for (const t of data.types) {
-    const opt = document.createElement('option');
-    opt.value = t; opt.textContent = t;
-    el('type').appendChild(opt);
-  }
-  for (const d of data.dispensaries) {
-    const opt = document.createElement('option');
-    opt.value = d; opt.textContent = d;
-    el('dispensary').appendChild(opt);
-  }
-  // Brands are alphabetical; weights arrive already ordered by real size
-  // (the server parses the label), so keep the order the API gave us.
-  for (const b of data.brands || []) {
-    const opt = document.createElement('option');
-    opt.value = b; opt.textContent = b;
-    el('brand').appendChild(opt);
-  }
-  for (const w of data.weights || []) {
-    const opt = document.createElement('option');
-    opt.value = w; opt.textContent = w;
-    el('weight').appendChild(opt);
-  }
+  for (const id of FILTER_IDS) fillSelect(id, data[FILTER_KEY[id]] || []);
+  return data;
 }
 
 async function loadMeta() {
@@ -367,10 +377,7 @@ async function loadMeta() {
 function buildQuery(page) {
   const params = new URLSearchParams();
   if (el('q').value.trim()) params.set('q', el('q').value.trim());
-  if (el('type').value) params.set('product_type', el('type').value);
-  if (el('dispensary').value) params.set('dispensary', el('dispensary').value);
-  if (el('brand').value) params.set('brand', el('brand').value);
-  if (el('weight').value) params.set('weight', el('weight').value);
+  for (const id of FILTER_IDS) for (const v of selected(id)) params.append(FILTER_PARAM[id], v);
   params.set('sort', el('sort').value);
   params.set('page', page);
   params.set('page_size', state.pageSize);
@@ -460,7 +467,7 @@ async function runSearch(page = 1, append = false) {
 
 function debouncedSearch() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => runSearch(1, false), 250);
+  debounceTimer = setTimeout(() => { loadFilters(); runSearch(1, false); }, 250);
 }
 
 /* ---- Filter / sort panels ---- */
@@ -492,7 +499,7 @@ function showModal(modal, button) {
 
 /** Reflect active filters on the button, so state is visible when closed. */
 function updateFilterButton() {
-  const active = ['type', 'dispensary', 'brand', 'weight'].filter(id => el(id).value).length;
+  const active = FILTER_IDS.reduce((n, id) => n + selected(id).length, 0);
   const badge = el('filterCount');
   badge.hidden = active === 0;
   badge.textContent = active;
@@ -529,18 +536,19 @@ for (const b of document.querySelectorAll('[data-close]')) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 el('filterReset').addEventListener('click', () => {
-  el('type').value = '';
-  el('dispensary').value = '';
-  el('brand').value = '';
-  el('weight').value = '';
+  for (const id of FILTER_IDS) {
+    for (const o of el(id).options) o.selected = false;
+  }
   updateFilterButton();
+  loadFilters();
   runSearch(1, false);
 });
 
 el('q').addEventListener('input', debouncedSearch);
-for (const id of ['type', 'dispensary', 'brand', 'weight']) {
+for (const id of FILTER_IDS) {
   el(id).addEventListener('change', () => {
     updateFilterButton();
+    loadFilters();          // re-narrow the other lists to what is still reachable
     runSearch(1, false);
   });
 }

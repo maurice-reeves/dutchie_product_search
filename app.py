@@ -7,7 +7,7 @@ Then open http://127.0.0.1:8000
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -35,7 +35,10 @@ def meta():
         conn.close()
 
 
-_WEIGHT_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?|\d+/\d+)\s*(g|mg|oz|lb)\s*$", re.I)
+# Leading-dot labels are common in this data (".1g", ".5g"), so the integer
+# part has to be optional — requiring a digit first sent them to the
+# non-weight bucket and they sorted after 100g.
+_WEIGHT_PATTERN = re.compile(r"^\s*(\d*\.\d+|\d+\.?\d*|\d+/\d+)\s*(g|mg|oz|lb)\s*$", re.I)
 _WEIGHT_IN_MG = {"mg": 1.0, "g": 1000.0, "oz": 28349.5, "lb": 453592.0}
 
 
@@ -59,35 +62,77 @@ def weight_sort_key(label: str):
     return (0, value * _WEIGHT_IN_MG[unit], "")
 
 
+# name in the response -> column on `products`
+FACET_COLUMNS = {
+    "types": "product_type",
+    "dispensaries": "dispensary_display",
+    "brands": "brand_name",
+    "weights": "weight_label",
+}
+
+
+def facet_conditions(selections: dict, exclude: str = None, q: str = ""):
+    """WHERE fragments for every selected facet except `exclude`.
+
+    A facet is excluded from its own option list so the list keeps showing the
+    alternatives you could switch to. Narrowing "brands" by the brands already
+    picked would collapse it to exactly what is selected, leaving no way to add
+    a second brand.
+    """
+    where, params = [], []
+    if q.strip():
+        where.append("id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)")
+        params.append(f'"{q.strip()}"*')
+    for name, column in FACET_COLUMNS.items():
+        if name == exclude:
+            continue
+        chosen = [v for v in (selections.get(name) or []) if v]
+        if chosen:
+            where.append(f"{column} IN ({','.join('?' * len(chosen))})")
+            params.extend(chosen)
+    return where, params
+
+
 @app.get("/api/filters")
-def filters():
+def filters(
+    q: str = Query(""),
+    product_type: Optional[List[str]] = Query(None),
+    dispensary: Optional[List[str]] = Query(None),
+    brand: Optional[List[str]] = Query(None),
+    weight: Optional[List[str]] = Query(None),
+):
+    """Available options for each filter, narrowed by the other filters.
+
+    Pass the current selections and each list comes back containing only values
+    that still have matching products, so picking a brand shrinks the weight
+    list to that brand's sizes.
+    """
+    selections = {
+        "types": product_type, "dispensaries": dispensary,
+        "brands": brand, "weights": weight,
+    }
     conn = get_conn()
     try:
-        types = [r[0] for r in conn.execute(
-            "SELECT DISTINCT product_type FROM products ORDER BY product_type"
-        )]
-        dispensaries = [r[0] for r in conn.execute(
-            "SELECT DISTINCT dispensary_display FROM products ORDER BY dispensary_display"
-        )]
-        brands = [r[0] for r in conn.execute(
-            "SELECT DISTINCT brand_name FROM products "
-            "WHERE brand_name != '' ORDER BY brand_name COLLATE NOCASE"
-        )]
-        weights = sorted(
-            (r[0] for r in conn.execute(
-                "SELECT DISTINCT weight_label FROM products WHERE weight_label != ''"
-            )),
-            key=weight_sort_key,
-        )
-        price_row = conn.execute("SELECT MIN(price), MAX(price) FROM products").fetchone()
-        return {
-            "types": types,
-            "dispensaries": dispensaries,
-            "brands": brands,
-            "weights": weights,
-            "min_price": price_row[0],
-            "max_price": price_row[1],
-        }
+        out = {}
+        for name, column in FACET_COLUMNS.items():
+            where, params = facet_conditions(selections, exclude=name, q=q)
+            clause = f"WHERE {' AND '.join(where)}" if where else ""
+            sql = (
+                f"SELECT DISTINCT {column} FROM products {clause}"
+                if clause else f"SELECT DISTINCT {column} FROM products"
+            )
+            values = [r[0] for r in conn.execute(sql, params) if r[0]]
+            out[name] = (
+                sorted(values, key=weight_sort_key) if name == "weights"
+                else sorted(values, key=str.lower)
+            )
+        price_where, price_params = facet_conditions(selections, q=q)
+        clause = f"WHERE {' AND '.join(price_where)}" if price_where else ""
+        price_row = conn.execute(
+            f"SELECT MIN(price), MAX(price) FROM products {clause}", price_params
+        ).fetchone()
+        out["min_price"], out["max_price"] = price_row[0], price_row[1]
+        return out
     finally:
         conn.close()
 
@@ -137,10 +182,10 @@ def attach_restock_flags(conn: sqlite3.Connection, results: list) -> None:
 @app.get("/api/search")
 def search(
     q: str = Query("", description="Free-text search over name/brand/dispensary"),
-    product_type: Optional[str] = None,
-    dispensary: Optional[str] = None,
-    brand: Optional[str] = None,
-    weight: Optional[str] = None,
+    product_type: Optional[List[str]] = Query(None),
+    dispensary: Optional[List[str]] = Query(None),
+    brand: Optional[List[str]] = Query(None),
+    weight: Optional[List[str]] = Query(None),
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|name_asc|newest)$"),
@@ -162,18 +207,19 @@ def search(
             )
             params.append(f'"{q.strip()}"*')
 
-        if product_type:
-            where.append("products.product_type = ?")
-            params.append(product_type)
-        if dispensary:
-            where.append("products.dispensary_display = ?")
-            params.append(dispensary)
-        if brand:
-            where.append("products.brand_name = ?")
-            params.append(brand)
-        if weight:
-            where.append("products.weight_label = ?")
-            params.append(weight)
+        # Each filter is multi-select: repeated query params become a list and
+        # widen the match rather than narrowing it. Different filters still AND
+        # together, so "Flower or Edible" at "Wyld or PAX" behaves as expected.
+        for column, values in (
+            ("products.product_type", product_type),
+            ("products.dispensary_display", dispensary),
+            ("products.brand_name", brand),
+            ("products.weight_label", weight),
+        ):
+            chosen = [v for v in (values or []) if v]
+            if chosen:
+                where.append(f"{column} IN ({','.join('?' * len(chosen))})")
+                params.extend(chosen)
         if min_price is not None:
             where.append("products.price >= ?")
             params.append(min_price)

@@ -47,16 +47,18 @@
     padding: 16px 24px;
   }
   h1 {
-    margin: 0 0 4px;
+    margin: 0 0 12px;
     font-size: 20px;
     font-weight: 700;
+    text-align: center;
   }
-  /* Its own line under the heading rather than trailing the title. */
+  /* Sits at the foot of the results, just above Load more. */
   .meta {
     font-size: 12px;
     color: var(--text-muted);
     font-weight: 400;
-    margin-bottom: 12px;
+    text-align: center;
+    margin-top: 28px;
   }
   .controls {
     display: flex;
@@ -122,7 +124,7 @@
   .card-dispensary { font-size: 11px; color: var(--text-muted); text-align: right; max-width: 55%; }
   .load-more {
     display: block;
-    margin: 28px auto 0;
+    margin: 14px auto 0;
     padding: 10px 22px;
     border-radius: 8px;
     border: 1px solid var(--border);
@@ -271,7 +273,6 @@
 <body>
 <header>
   <h1>Dutchie Product Search</h1>
-  <div class="meta" id="meta"></div>
   <div class="controls">
     <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
     <div class="btn-group">
@@ -327,6 +328,7 @@
 <main>
   <div class="status" id="status"></div>
   <div class="grid" id="grid"></div>
+  <div class="meta" id="meta"></div>
   <button class="load-more" id="loadMore" hidden>Load more</button>
 </main>
 

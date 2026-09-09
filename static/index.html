@@ -370,7 +370,13 @@ function restockBadge(p) {
 }
 
 function cardHTML(p) {
-  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.weight_label, p.thc_display]
+  // THC is shown only as a dose (mg), not as a percentage: percentages aren't
+  // wanted on the card. Zero-valued readings ("0-0mg") are dropped as noise —
+  // they mean "not reported", not a zero-THC product. The DB keeps the full
+  // value either way.
+  const thc = (p.thc_display && !p.thc_display.endsWith('%') && !/^0(-0)?(\.0+)?(mg|mg\/g)$/.test(p.thc_display))
+    ? p.thc_display : '';
+  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.weight_label, thc]
     .filter(Boolean)
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join('');

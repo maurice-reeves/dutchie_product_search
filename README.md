@@ -281,6 +281,65 @@ can `grep` the URL out of the log within a couple of seconds.
 
 ---
 
+## Product popup: same product elsewhere, similar products
+
+Clicking a card opens a popup with the product, **every other dispensary
+selling the same product at the same size** (each store's lowest price, the
+range/average/median, and where this store ranks), and a row of **similar
+products**. The data behind it is built offline by `build_similarity.py`,
+so the site itself only reads four extra tables:
+
+```bash
+/usr/local/bin/python3 build_similarity.py all --db data/products_dev.db      # ~12 min: embed, index, groups
+/usr/local/bin/python3 build_similarity.py groups --db data/products_dev.db   # ~2 min when embeddings exist
+```
+
+It runs under the **default** Python (which has `sentence-transformers`,
+`faiss-cpu`, `torch`), not the venv. `embed` and `index` are separate
+processes on purpose: `torch` and `faiss` each ship an OpenMP runtime and
+importing both in one process segfaults on macOS.
+
+| table | what |
+| --- | --- |
+| `product_prices` | one row per product per size (`size_key`, label, price, sale price) — from Dutchie's `Options`×`recPrices` and Jane's `price_*` columns |
+| `product_groups` | the "same product" group each row belongs to, with a `confidence` and the tier (`method`) that placed it |
+| `group_prices` | per (group, size): store count and min/median/avg/max of each store's best price |
+| `similar_products` | top-12 embedding neighbours per product, distinct products only, own group excluded |
+
+`GET /api/products/{id}/detail` returns the product, its sizes, the offers at
+the viewed size (one per store, with `confidence` and `is_this`) and the
+similar list. On a database without the tables (production, until the
+builder runs there) it returns the product alone and the popup degrades.
+
+### How "same product" is decided
+
+Deterministic first, model second, and every group carries a confidence
+(see `PLAN_similar_products.md` for the calibration; 94/100 on a hand-labelled
+sample of cross-store pairs). In order:
+
+1. Jane `product_id` — a real catalog key (1.0).
+2. Identical normalised name within a **block** = brand + type + size (0.95).
+   Sizes/doses and brand words are stripped from the name; parenthetical
+   words are kept because "(Indica)"/"(Hybrid)", "(Black)"/"(Tan)" are
+   different products. Edibles/tinctures/topicals block on the labelled
+   **dose** (Dutchie stores net weight, Jane the dose); everything else on
+   weight canonicalised to mg.
+3. Dutchie `libraryProductId` — **not** a key (it links product *lines*), so it
+   only proposes pairs that still need distinctive-token overlap ≥ 0.8 and
+   embedding cosine ≥ 0.90 (0.9).
+4. FAISS neighbours in the same block with cosine ≥ 0.92 and distinctive-token
+   overlap ≥ 0.8 (confidence = cosine). "Distinctive" = after removing
+   category words (live, rosin, cart, gummies, …) — otherwise every Lazercat
+   item looks like every other.
+5. Group-level vetoes on every merge: never two rows from the same dispensary,
+   never two different stated strains, formats (cartridge vs AIO vs kit) or
+   pack counts. Checking at the group level is what stops A↔B↔C chains.
+
+Matching is deliberately not the last word: every offer in the popup has a
+checkbox, unticked offers drop out of the range/average/median live, and
+the choice is remembered per group in `localStorage`. Low-confidence offers
+are labelled "likely the same".
+
 ## Status dashboard (`/dash`)
 
 A private page showing the host (CPU, memory, disk, network, uptime), the
@@ -361,6 +420,8 @@ falls back to `id` order. Response:
 app.py                 FastAPI search API + static file mount (PRODUCTS_DB overrides the DB)
 import_csv.py          Dutchie CSV → SQLite builder (run to (re)build the DB)
 import_vireo_csv.py    Vireo/Jane CSV → data/products_dev.db (prod + Vireo, for review)
+build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
+tests/                 pytest for the matching rules (/usr/local/bin/python3 -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
 dashboard/             private /dash status page: metrics, visitors, auth
 start_search.command   double-click launcher: server + Cloudflare tunnel

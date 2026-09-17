@@ -9,3 +9,4 @@ __pycache__/
 .dashboard_password
 data/visitors.json
 data/products_dev.db
+data/

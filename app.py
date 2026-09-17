@@ -279,6 +279,72 @@ def search(
         conn.close()
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+
+
+@app.get("/api/products/{product_row}/detail")
+def product_detail(product_row: int):
+    """Everything the product popup needs in one round-trip.
+
+    `offers` are the same product at other dispensaries -- one row per store,
+    that store's lowest price *at the same size* as the product being viewed,
+    each carrying the confidence of the match so the page can flag the shaky
+    ones and let the shopper untick them. `similar` are the nearest
+    embedding neighbours outside the product's own group. Both come from
+    tables that build_similarity.py writes; on a database without them
+    (production, until the builder runs there) they are simply empty and the
+    popup shows the product alone.
+    """
+    conn = get_conn()
+    try:
+        product = conn.execute("SELECT * FROM products WHERE id = ?", (product_row,)).fetchone()
+        if product is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        product = dict(product)
+        out = {"product": product, "sizes": [], "group": None, "offers": [], "similar": []}
+        if not _table_exists(conn, "product_groups"):
+            return JSONResponse(out)
+
+        out["sizes"] = [dict(r) for r in conn.execute(
+            "SELECT size_key, size_label, price, sale_price FROM product_prices WHERE product_row = ? ORDER BY price", (product_row,))]
+        # The size the card's price refers to: the row whose label matches the
+        # product's weight label, else the first (cheapest) size.
+        primary = next((s for s in out["sizes"] if s["size_label"] == product.get("weight_label")), out["sizes"][0] if out["sizes"] else None)
+
+        grp = conn.execute("SELECT group_id, confidence, method FROM product_groups WHERE product_row = ?", (product_row,)).fetchone()
+        if grp and primary:
+            size_key = primary["size_key"]
+            rows = conn.execute("""
+                SELECT p.id, p.name, p.brand_name, p.weight_label, p.dispensary_display, p.dispensary_slug, p.product_url,
+                       p.quantity_available, g.confidence, g.method, pp.price, pp.sale_price, pp.size_label
+                FROM product_groups g
+                JOIN products p ON p.id = g.product_row
+                JOIN product_prices pp ON pp.product_row = p.id AND pp.size_key = ?
+                WHERE g.group_id = ?
+                ORDER BY pp.price""", (size_key, grp["group_id"])).fetchall()
+            offers, seen = [], set()
+            for r in rows:                              # first row per store is that store's lowest price
+                if r["dispensary_slug"] in seen:
+                    continue
+                seen.add(r["dispensary_slug"])
+                o = dict(r)
+                o["is_this"] = r["id"] == product_row
+                offers.append(o)
+            out["group"] = {"group_id": grp["group_id"], "confidence": grp["confidence"], "method": grp["method"],
+                            "size_key": size_key, "size_label": primary["size_label"], "n_stores": len(offers)}
+            out["offers"] = offers
+
+        out["similar"] = [dict(r) for r in conn.execute("""
+            SELECT p.id, p.name, p.brand_name, p.product_type, p.weight_label, p.thc_display, p.price,
+                   p.image_url, p.dispensary_display, p.product_url, s.score
+            FROM similar_products s JOIN products p ON p.id = s.similar_row
+            WHERE s.product_row = ? ORDER BY s.rank""", (product_row,))]
+        return JSONResponse(out)
+    finally:
+        conn.close()
+
+
 # Private owner-only status page (/dash) plus the public visitor heartbeat.
 # Registered before the static mount, which would otherwise swallow /dash.
 app.include_router(dashboard.router)

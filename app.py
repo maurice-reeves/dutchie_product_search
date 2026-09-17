@@ -13,10 +13,13 @@ from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+import dashboard
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 DB_PATH = PROJECT_ROOT / "data" / "products.db"
 
-app = FastAPI(title="Dutchie Product Search")
+# The lifespan runs the dashboard's metrics sampler alongside the app.
+app = FastAPI(title="Dutchie Product Search", lifespan=dashboard.lifespan)
 
 
 def get_conn() -> sqlite3.Connection:
@@ -272,5 +275,9 @@ def search(
     finally:
         conn.close()
 
+
+# Private owner-only status page (/dash) plus the public visitor heartbeat.
+# Registered before the static mount, which would otherwise swallow /dash.
+app.include_router(dashboard.router)
 
 app.mount("/", StaticFiles(directory=PROJECT_ROOT / "static", html=True), name="static")

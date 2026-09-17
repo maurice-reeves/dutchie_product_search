@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Status · Dutchie Product Search</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #e3e5e9;
+    --text: #1a1b1e;
+    --text-muted: #6b7280;
+    --accent: #16805a;
+    --blue: #2f6fe0;
+    --warn: #c2410c;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1e2126;
+      --border: #2c2f36;
+      --text: #f1f2f4;
+      --text-muted: #9aa0a8;
+      --accent: #2fbf83;
+      --blue: #6b9cff;
+      --warn: #fb923c;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 48px;
+  }
+  main { max-width: 960px; margin: 0 auto; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .crumb { font-size: 12px; color: var(--text-muted); }
+  .crumb a { color: inherit; }
+  h1 { font-size: 26px; line-height: 1.2; margin: 6px 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-muted); margin: 0; font-size: 15px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 5px 12px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--border); white-space: nowrap;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .dot.bad { background: var(--warn); }
+  .visitors { text-align: right; }
+  .visitors .n { font-size: 40px; font-weight: 700; line-height: 1; margin: 6px 0 4px; }
+  .visitors small { display: block; color: var(--text-muted); font-size: 11px; }
+
+  .label {
+    font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 600;
+  }
+  .live { color: var(--accent); text-transform: none; letter-spacing: 0; }
+  section { margin-top: 28px; }
+  .grid { display: grid; gap: 12px; margin-top: 10px; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 720px) {
+    .g4 { grid-template-columns: repeat(2, 1fr); }
+    .g5 { grid-template-columns: repeat(2, 1fr); }
+    .g2 { grid-template-columns: 1fr; }
+    h1 { font-size: 22px; }
+    .visitors { text-align: left; }
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0;
+  }
+  .card .v { font-size: 24px; font-weight: 700; margin: 6px 0 2px; }
+  .card .s { font-size: 11px; color: var(--text-muted); }
+  .card.small .v { font-size: 15px; margin-top: 4px; }
+  .card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card .head .r { font-size: 13px; font-weight: 600; }
+  canvas { width: 100%; height: 72px; display: block; margin-top: 10px; }
+  .legend { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 8px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--border); margin: 10px 0 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--blue); border-radius: 3px; width: 0; transition: width .4s; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .log {
+    white-space: pre-wrap; word-break: break-word; margin: 8px 0 0;
+    color: var(--text-muted); max-height: 120px; overflow: auto;
+  }
+  .err { color: var(--warn); font-size: 13px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <div class="crumb"><a href="/">← search</a> · <span id="host">…</span></div>
+      <h1>Search server status</h1>
+      <p class="sub" id="subtitle">Serving <span id="rows">…</span> products from <span id="disp">…</span> dispensaries.</p>
+    </div>
+    <div>
+      <div class="pill" id="pill"><span class="dot" id="dot"></span><span id="pillText">connecting…</span></div>
+      <div class="visitors">
+        <div class="label">Visitors now</div>
+        <div class="n" id="vNow">–</div>
+        <small>peak <span id="vPeak">–</span> at once</small>
+        <small><span id="vViews">–</span> page views</small>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <span class="label">Right now <span class="live">● live</span></span>
+    <div class="grid g4">
+      <div class="card"><div class="label">Uptime</div><div class="v" id="uptime">–</div><div class="s" id="booted">–</div></div>
+      <div class="card"><div class="label">CPU</div><div class="v" id="cpu">–</div><div class="s" id="cores">–</div></div>
+      <div class="card"><div class="label">Memory</div><div class="v" id="mem">–</div><div class="s" id="memTotal">–</div></div>
+      <div class="card"><div class="label">Temperature</div><div class="v" id="temp">–</div><div class="s" id="tempNote">–</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="head"><span class="label">CPU, last hour</span><span class="r" id="cpuNow">–</span></div>
+        <canvas id="cpuChart"></canvas>
+      </div>
+      <div class="card">
+        <div class="head"><span class="label">Network, last hour</span><span class="r" id="netNow">–</span></div>
+        <canvas id="netChart"></canvas>
+        <div class="legend"><i style="background:var(--blue)"></i>down &nbsp; <i style="background:var(--accent)"></i>up</div>
+      </div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="head"><span class="label">Memory</span><span class="r" id="memPct">–</span></div>
+        <div class="bar"><div id="memBar"></div></div>
+        <div class="s" id="memFree">–</div>
+      </div>
+      <div class="card">
+        <div class="head"><span class="label">Disk</span><span class="r" id="diskPct">–</span></div>
+        <div class="bar"><div id="diskBar"></div></div>
+        <div class="s" id="diskFree">–</div>
+      </div>
+    </div>
+    <div class="grid g5">
+      <div class="card small"><div class="label">Load</div><div class="v" id="load">–</div></div>
+      <div class="card small"><div class="label">Transferred</div><div class="v" id="xfer">–</div></div>
+      <div class="card small"><div class="label">Swap used</div><div class="v" id="swap">–</div></div>
+      <div class="card small"><div class="label">Processes</div><div class="v" id="procs">–</div></div>
+      <div class="card small"><div class="label">System</div><div class="v" id="os">–</div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">Daily scrape</span>
+    <div class="grid g4">
+      <div class="card"><div class="label">Last import</div><div class="v" id="impAt">–</div><div class="s mono" id="impCsv">–</div></div>
+      <div class="card"><div class="label">Products indexed</div><div class="v" id="impRows">–</div><div class="s" id="impDisp">–</div></div>
+      <div class="card"><div class="label">Run status</div><div class="v" id="runState">–</div><div class="s" id="runNote">–</div></div>
+      <div class="card"><div class="label">Latest log</div><div class="v small" id="logAge" style="font-size:15px">–</div><div class="s mono" id="logName">–</div></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="label">Last log line</div>
+      <pre class="log mono" id="logLine">–</pre>
+    </div>
+  </section>
+  <div class="err" id="err" hidden></div>
+</main>
+
+<script>
+const el = id => document.getElementById(id);
+const POLL_MS = 5000;
+
+function fmtDuration(s) {
+  s = Math.floor(s);
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m ${s % 60}s`;
+}
+function ago(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return 'just now';
+  return fmtDuration(s) + ' ago';
+}
+function fmtRate(kbs) {
+  return kbs >= 1024 ? (kbs / 1024).toFixed(1) + ' MB/s' : kbs.toFixed(1) + ' KB/s';
+}
+function fmtMB(mb) {
+  return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB';
+}
+function fmtDateTime(str) {
+  const d = new Date(str.replace(' ', 'T'));
+  return isNaN(d) ? str : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// Sparkline: `series` is a list of {values, color}; all share the y-scale.
+function sparkline(canvas, series, maxY) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const n = Math.max(...series.map(s => s.values.length));
+  if (n < 2) return;
+  const top = maxY ?? Math.max(1, ...series.flatMap(s => s.values));
+  const pad = 3;
+  for (const s of series) {
+    ctx.beginPath();
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    s.values.forEach((v, i) => {
+      const x = pad + (w - 2 * pad) * i / (n - 1);
+      const y = h - pad - (h - 2 * pad) * Math.min(v, top) / top;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  }
+}
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function render(d) {
+  const now = d.now, v = d.visitors, sc = d.scrape;
+  el('host').textContent = now.host;
+  el('uptime').textContent = fmtDuration(now.uptime_s);
+  el('booted').textContent = 'booted ' + fmtDuration(now.uptime_s) + ' ago';
+  el('cpu').textContent = now.cpu_pct.toFixed(1) + '%';
+  el('cores').textContent = now.cores + ' cores';
+  el('mem').textContent = fmtMB(now.mem_used_mb);
+  el('memTotal').textContent = 'of ' + fmtMB(now.mem_total_mb);
+  if (now.temp_c == null) {
+    el('temp').textContent = 'n/a';
+    el('tempNote').textContent = 'not readable on this host';
+  } else {
+    el('temp').textContent = now.temp_c.toFixed(1) + '°C';
+    el('tempNote').textContent = now.throttled == null ? '' : now.throttled ? 'throttled since boot' : 'no throttling';
+  }
+
+  const memPct = 100 * now.mem_used_mb / now.mem_total_mb;
+  el('memPct').textContent = memPct.toFixed(1) + '% used';
+  el('memBar').style.width = memPct + '%';
+  el('memFree').textContent = fmtMB(now.mem_total_mb - now.mem_used_mb) + ' free of ' + fmtMB(now.mem_total_mb);
+  el('diskPct').textContent = now.disk_pct.toFixed(1) + '% used';
+  el('diskBar').style.width = now.disk_pct + '%';
+  el('diskFree').textContent = now.disk_free_gb + ' GB free of ' + now.disk_total_gb + ' GB';
+
+  el('load').textContent = now.load.map(x => x.toFixed(2)).join(' / ');
+  el('xfer').textContent = '↓ ' + fmtMB(now.net_total_down_mb) + '  ↑ ' + fmtMB(now.net_total_up_mb);
+  el('swap').textContent = now.swap_total_mb ? `${now.swap_used_mb} / ${now.swap_total_mb} MB` : 'none';
+  el('procs').textContent = now.procs;
+  el('os').textContent = now.os;
+
+  el('cpuNow').textContent = now.cpu_pct.toFixed(1) + '%';
+  el('netNow').textContent = '↓ ' + fmtRate(now.net_down_kbs) + ' ↑ ' + fmtRate(now.net_up_kbs);
+  const hist = d.history;
+  sparkline(el('cpuChart'), [{ values: hist.map(s => s.cpu_pct), color: cssVar('--blue') }], 100);
+  sparkline(el('netChart'), [
+    { values: hist.map(s => s.net_down_kbs), color: cssVar('--blue') },
+    { values: hist.map(s => s.net_up_kbs), color: cssVar('--accent') },
+  ]);
+
+  el('vNow').textContent = v.now;
+  el('vPeak').textContent = v.peak;
+  el('vViews').textContent = v.views.toLocaleString();
+
+  const imp = sc.last_import;
+  el('impAt').textContent = imp ? fmtDateTime(imp.at) : 'never';
+  el('impCsv').textContent = imp ? imp.csv : '';
+  el('impRows').textContent = imp ? imp.rows.toLocaleString() : '–';
+  el('impDisp').textContent = sc.dispensaries != null ? `across ${sc.dispensaries} dispensaries` : '';
+  el('rows').textContent = imp ? imp.rows.toLocaleString() : '?';
+  el('disp').textContent = sc.dispensaries ?? '?';
+
+  if (sc.run) {
+    el('runState').textContent = 'in progress';
+    el('runNote').textContent = `${sc.run.dispensaries_done ?? '?'} dispensaries done · last part ${ago(sc.run.since)}`;
+  } else {
+    el('runState').textContent = 'idle';
+    el('runNote').textContent = 'next run 06:00';
+  }
+  const log = sc.latest_log;
+  el('logAge').textContent = log ? ago(log.mtime) : 'none';
+  el('logName').textContent = log ? log.name : '';
+  el('logLine').textContent = log ? log.last_line : '–';
+
+  const stale = sc.run && (Date.now() / 1000 - sc.run.since) > 3 * 3600;
+  el('dot').classList.toggle('bad', !!stale);
+  el('pillText').textContent = stale ? 'scrape stalled' : 'all systems operational';
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/api/dash/status', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    render(await res.json());
+    el('err').hidden = true;
+  } catch (e) {
+    el('err').hidden = false;
+    el('err').textContent = 'Lost contact with the server: ' + e.message;
+    el('dot').classList.add('bad');
+    el('pillText').textContent = 'unreachable';
+  }
+}
+poll();
+setInterval(poll, POLL_MS);
+window.addEventListener('resize', poll);
+</script>
+</body>
+</html>

@@ -564,6 +564,24 @@ updateFilterButton();
 loadFilters();
 loadMeta();
 runSearch(1, false);
+
+// Presence ping for the owner's status page: a random id for this tab and
+// nothing else. The first ping counts as a page view.
+(() => {
+  let id;
+  try {
+    id = sessionStorage.getItem('hb') || crypto.randomUUID();
+    sessionStorage.setItem('hb', id);
+  } catch (e) { id = crypto.randomUUID(); }
+  const ping = first => fetch('/api/heartbeat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: id, first }),
+    keepalive: true,
+  }).catch(() => {});
+  ping(true);
+  setInterval(() => { if (!document.hidden) ping(false); }, 10000);
+})();
 </script>
 </body>
 </html>

@@ -4,3 +4,8 @@ logs/
 __pycache__/
 *.pyc
 .DS_Store
+.afdc_api_key
+.afdc_api_key
+.dashboard_password
+data/visitors.json
+data/products_dev.db

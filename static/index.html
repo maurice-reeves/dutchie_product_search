@@ -295,7 +295,12 @@
   .pricebar i.me { background: var(--accent); width: 6px; top: -5px; height: 18px; }
   .pricebar-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
   .offers { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  .offers th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .offers th.num { text-align: right; }
   .offers td { padding: 6px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .offers td.rank { color: var(--text-muted); width: 28px; text-align: right; }
+  .offers td.listed { color: var(--text-muted); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .offers td.size { white-space: nowrap; color: var(--text-muted); }
   .offers tr.me td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
   .offers tr.off td { color: var(--text-muted); text-decoration: line-through; }
   .offers tr.off td.chk { text-decoration: none; }
@@ -306,8 +311,10 @@
   .offers .listed { font-size: 11px; color: var(--text-muted); display: block; }
   .offers tr.gap td { text-align: center; color: var(--text-muted); font-size: 11px; padding: 2px; }
   .showall { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 6px 0; }
-  .similar { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  .simcard { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 12px; cursor: pointer; }
+  .similar { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .simcard { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 12px; cursor: pointer; position: relative; }
+  .simcard img { width: 100%; height: 110px; object-fit: contain; background: var(--surface); border-radius: 6px; margin-bottom: 6px; }
+  .simcard .score { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
   .simcard:hover { border-color: var(--accent); }
   .simcard .n { font-weight: 600; line-height: 1.3; }
   .simcard .m { color: var(--text-muted); margin-top: 3px; }
@@ -658,6 +665,13 @@ async function openProduct(id, push = true) {
   el('productModal').scrollTop = 0;
 }
 
+/* Every offer in a group is the same size by construction; for dosed products
+   show the dose itself rather than each store's label for it (".1g",
+   "100milligrams" and "100mg" are all the same gummy). */
+function sizeText(g, o) {
+  return g.size_key.endsWith('mgTHC') ? g.size_key.replace('mgTHC', 'mg') : (o.size_label || '');
+}
+
 function median(xs) {
   const a = [...xs].sort((x, y) => x - y), n = a.length;
   return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
@@ -706,16 +720,19 @@ function renderProduct() {
     const shown = offers.slice(0, limit);
     const mineIdx = offers.findIndex(o => o.is_this);
     if (mineIdx >= limit) shown.push({ gap: true, skipped: mineIdx - limit }, offers[mineIdx]);
-    const rows = shown.map(o => o.gap ? `<tr class="gap"><td colspan="4">… ${o.skipped} more ${o.skipped === 1 ? 'dispensary' : 'dispensaries'} …</td></tr>` : `
+    const rankOf = new Map(offers.map((o, k) => [o.id, k + 1]));
+    const rows = shown.map(o => o.gap ? `<tr class="gap"><td colspan="7">… ${o.skipped} more ${o.skipped === 1 ? 'dispensary' : 'dispensaries'} …</td></tr>` : `
       <tr class="${o.is_this ? 'me' : ''} ${productExcluded.has(o.id) ? 'off' : ''}">
         <td class="chk"><input type="checkbox" data-offer="${o.id}" ${productExcluded.has(o.id) ? '' : 'checked'} aria-label="include in comparison"></td>
-        <td>${escapeHtml(o.dispensary_display)}${o.confidence < 0.9 ? '<span class="lowconf" title="matched by name similarity, not an exact key">likely the same</span>' : ''}
-            ${o.name !== p.name ? `<span class="listed">${escapeHtml(o.name)}</span>` : ''}</td>
+        <td class="rank">${rankOf.get(o.id)}</td>
+        <td>${escapeHtml(o.dispensary_display)}${o.confidence < 0.9 ? '<span class="lowconf" title="matched by name similarity, not an exact key">likely the same</span>' : ''}</td>
+        <td class="listed" title="${escapeAttr(o.name)}">${escapeHtml(o.name)}</td>
+        <td class="size">${escapeHtml(sizeText(g, o))}</td>
         <td class="num">${money(o.price)}${o.sale_price ? ` <span class="sub">sale ${money(o.sale_price)}</span>` : ''}</td>
         <td class="num"><a href="${escapeAttr(o.product_url)}" target="_blank" rel="noopener">view</a></td>
       </tr>`).join('');
     html += `<section><h3>Same product at other dispensaries · ${escapeHtml(g.size_label || '')}</h3>${verdict}${bar}
-      <table class="offers"><tbody>${rows}</tbody></table>
+      <table class="offers"><thead><tr><th></th><th class="num">#</th><th>Dispensary</th><th>Listed as</th><th>Size</th><th class="num">Price</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       ${offers.length > limit ? `<button class="showall" data-showall>Show all ${offers.length} dispensaries</button>` : ''}
       <div class="sub" style="margin-top:8px">Untick a row to leave it out of the average. Your choices are remembered on this device.</div></section>`;
   }
@@ -723,6 +740,8 @@ function renderProduct() {
   if (d.similar.length) {
     html += `<section><h3>Similar products</h3><div class="similar">${d.similar.map(s => `
       <div class="simcard" data-id="${s.id}" role="button" tabindex="0">
+        ${s.image_url ? `<img src="${escapeAttr(s.image_url)}" alt="" loading="lazy">` : ''}
+        <span class="score" title="similarity">${s.score.toFixed(2)}</span>
         <div class="n">${escapeHtml(s.brand_name ? s.brand_name + ' — ' : '')}${escapeHtml(s.name)}</div>
         <div class="m">${escapeHtml([s.product_type, s.weight_label, s.thc_display].filter(Boolean).join(' · '))}</div>
         <div class="p">${money(s.price)} <span class="m">${escapeHtml(s.dispensary_display)}</span></div>

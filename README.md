@@ -139,6 +139,55 @@ any time you have a fresh scrape.
 Re-importing new data does **not** need a server restart — just refresh
 the page.
 
+### 4. Adding Vireo's Jane stores (dev database)
+
+Vireo Growth's Colorado chains — The Green Solution, Medicine Man, LivWell,
+Star Buds / Standing Akimbo, Every Day Weed, Green Dragon — sell through
+**Jane** storefronts, not Dutchie, so `import_csv.py` never sees them. The
+scraper's `scripts/scrape_vireo_dispensaries.py` writes their menus to
+`vireo_products<stamp>.csv` (~35k products from 51 Denver-area stores), and
+`import_vireo_csv.py` folds that into a **separate dev database** so the
+combined index can be reviewed without touching production:
+
+```bash
+./.venv/bin/python import_vireo_csv.py ../vireo_products20260917_075024.csv
+PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
+```
+
+`products_dev.db` is a copy of `products.db` plus the Vireo rows (87k
+products, 187 dispensaries as of Sept 2026). `PRODUCTS_DB` is the only
+switch; with it unset, `app.py` serves `data/products.db` as always.
+
+#### Jane → `products` column mapping
+
+Jane's records are Algolia hits with ~90 fields. The importer maps them onto
+the same 22 columns Dutchie fills, normalising vocabularies so the filters
+merge. The decisions, for when the mapping needs revisiting:
+
+| `products` column | Jane source | Rule |
+| --- | --- | --- |
+| `name` | `name` | required — row dropped if missing |
+| `price` | `bucket_price` | the "from" price on the menu card; required. Per-weight prices (`price_gram`, `price_eighth_ounce`, …) and specials (`special_price_*`) are in the CSV but unused |
+| `image_url` | `image_urls[0]` | **not** required — a Vireo row is kept without an image, unlike Dutchie rows |
+| `brand_name` | `brand` | |
+| `product_type` | `kind` | `flower`→Flower, `vape`→Vaporizers, `edible`→Edible, `extract`→Concentrate, `pre-roll`→Pre-Rolls, `tincture`→Tincture, `topical`→Topicals, `gear`→Accessories (Clothing→Apparel), `grow`→Seeds (name contains "clone"→Clones), `merch`→Apparel |
+| `product_subcategory` | `root_subtype`, refined by `brand_subtype` for edibles | ~70-entry table (`SUBCATEGORY` in the importer) onto Dutchie's slugs, e.g. Disposables→`disposables`, Live Resins→`live-resin`, Infused Packs→`infused-pre-roll-packs`, Patches→`transdermal-patches`, gear Vaporizers→`batteries`, Papers/Cones/Wraps/Tips→`papers-rolling-supplies`. Jane's edible "Candies" is split by `brand_subtype` (Gummies→`gummies`, Chocolates→`chocolates`, Beverages→`drinks`, Confections→`candy`, …). TGS flower price tiers (Silver/Gold/Bronze/Select/Value) and catch-alls (Other, Paraphernalia, Accessories) → blank, like Dutchie's plain flower. Unknown subtypes fall back to a slug of the Jane name |
+| `strain_type` | `category` | hybrid/indica/sativa/cbd → Hybrid/Indica/Sativa/High CBD |
+| `thc_display` | `percent_thc` **or** `dosage` | flower/vape/extract/pre-roll: `percent_thc` as "24.3%". Edible/tincture/topical: the `dosage` string ("100mg", "100mg CBD/100mg THC") — Jane sometimes stores an edible's *mg* figure in `percent_thc`, which would render as "100%" |
+| `weight_label` | `available_weights`, else `amount` | Jane weight keys → Dutchie labels: half gram→`.5g`, gram→`1g`, two gram→`2g`, eighth ounce→`1/8oz`, quarter ounce→`1/4oz`, half ounce→`1/2oz`, ounce→`1oz` (smallest listed weight wins). Un-weighted items use `amount` ("10pk", "1000mg") |
+| `weight_mg` | `net_weight_grams` × 1000 | |
+| `dispensary_display` / `dispensary_slug` | `storeName` / slug of it | store names come from Jane's own store list (`list_stores`) |
+| `dispensary_url` | `url` | `https://www.<brand>/shop/store/<id>/shop-all` |
+| `product_url` / `product_slug` | `product_id` + `url_slug` | `https://www.<brand>/shop/products/<product_id>/<url_slug>` |
+| `product_id` | `product_id` | stable across days, so the *returned* restock signal works once snapshots exist |
+| `quantity_available` | `max_cart_quantity` | Jane caps the cart at stock on hand — a proxy, not a count |
+| `scrape_date` | `scrapeDate` | |
+| `created_at`, `updated_at`, `package_id` | — | Jane exposes none of these. Vireo cards show no "Added" line, don't rank under "Newest first", and can't produce the *new package* restock signal |
+
+Dates are written as naive UTC text (`2025-09-22 16:14:38.341000`), the
+format `import_csv.py` uses — the page's date parser doesn't accept a
+`+00:00` suffix and would print the raw timestamp on the card.
+
 ---
 
 ## One-step launcher (`start_search.command`)
@@ -232,6 +281,25 @@ can `grep` the URL out of the log within a couple of seconds.
 
 ---
 
+## Status dashboard (`/dash`)
+
+A private page showing the host (CPU, memory, disk, network, uptime), the
+scrape (last import, whether a run is in flight via the checkpoint
+directory, the latest scraper log line) and live visitors. It is
+password-protected with HTTP Basic auth and **does not exist** until a
+password is configured — every route 404s otherwise:
+
+```bash
+echo 'a-long-password' > .dashboard_password     # git-ignored; or DASHBOARD_PASSWORD=...
+# optional: DASHBOARD_USER (default admin), DASHBOARD_SCRAPE_DIR (default: parent dir)
+```
+
+Then `/dash` (user `admin`). Visitor counts come from a heartbeat the search
+page posts every 10 s carrying only a random per-tab id; views and the peak
+persist in `data/visitors.json`. The dashboard lives in `dashboard/` and is
+never served from `static/`. Run uvicorn with a single worker — the
+counters are in-process.
+
 ## HTTP API
 
 All endpoints return JSON. Served by `app.py`.
@@ -290,13 +358,15 @@ falls back to `id` order. Response:
 ## Project layout
 
 ```
-app.py                 FastAPI search API + static file mount
-import_csv.py          CSV → SQLite builder (run to (re)build the DB)
+app.py                 FastAPI search API + static file mount (PRODUCTS_DB overrides the DB)
+import_csv.py          Dutchie CSV → SQLite builder (run to (re)build the DB)
+import_vireo_csv.py    Vireo/Jane CSV → data/products_dev.db (prod + Vireo, for review)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
+dashboard/             private /dash status page: metrics, visitors, auth
 start_search.command   double-click launcher: server + Cloudflare tunnel
-requirements.txt       pandas, fastapi, uvicorn[standard]
+requirements.txt       pandas, fastapi, uvicorn[standard], psutil
 static/index.html      the entire frontend (no build step)
-data/products.db       generated; git-ignored
+data/products.db       generated; git-ignored (products_dev.db, visitors.json too)
 logs/                  uvicorn.log, cloudflared.log; git-ignored
 ```
 

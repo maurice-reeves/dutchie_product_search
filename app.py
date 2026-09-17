@@ -4,6 +4,7 @@ Run with:
     ./.venv/bin/uvicorn app:app --reload --port 8000
 Then open http://127.0.0.1:8000
 """
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -16,7 +17,9 @@ from fastapi.staticfiles import StaticFiles
 import dashboard
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DB_PATH = PROJECT_ROOT / "data" / "products.db"
+# PRODUCTS_DB lets a dev instance serve a different database (e.g. one that
+# includes the Vireo/Jane import) on another port without touching production.
+DB_PATH = Path(os.environ.get("PRODUCTS_DB", PROJECT_ROOT / "data" / "products.db"))
 
 # The lifespan runs the dashboard's metrics sampler alongside the app.
 app = FastAPI(title="Dutchie Product Search", lifespan=dashboard.lifespan)

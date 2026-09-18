@@ -289,11 +289,15 @@ can `grep` the URL out of the log within a couple of seconds.
 
 ## Product popup: same product elsewhere, similar products
 
-Clicking a card opens a popup with the product, **every other dispensary
-selling the same product at the same size** (each store's lowest price, the
-range/average/median, and where this store ranks), and a row of **similar
-products**. The data behind it is built offline by `build_similarity.py`,
-so the site itself only reads four extra tables:
+Clicking a card opens a popup with the product and **one price list**:
+every other dispensary selling the same product at the same size (each
+store's lowest price) together with the nearest **similar products**, sorted
+by price. Ticked rows make up the range, average, median and the "#n
+cheapest" verdict; same-product offers start ticked, similar products start
+unticked, and a similar product is priced at the size being compared when
+it is sold in that size (otherwise its size cell is flagged `≠`). The data
+behind it is built offline by `build_similarity.py`, so the site itself only
+reads four extra tables:
 
 ```bash
 /usr/local/bin/python3 build_similarity.py all --db data/products_dev.db      # ~12 min: embed, index, groups
@@ -360,10 +364,14 @@ sample of cross-store pairs). In order:
    never two different stated strains, formats (cartridge vs AIO vs kit) or
    pack counts. Checking at the group level is what stops A↔B↔C chains.
 
-Matching is deliberately not the last word: every offer in the popup has a
-checkbox, unticked offers drop out of the range/average/median live, and
-the choice is remembered per group in `localStorage`. Low-confidence offers
-are labelled "likely the same".
+Matching is deliberately not the last word: every row in the popup has a
+checkbox, ticking or unticking one recomputes the range/average/median and
+the ranking live, and the choices are remembered per product in
+`localStorage` (key `cmp:<group>:<size>`: same-product rows unticked,
+similar rows ticked). Low-confidence offers are labelled "likely the same";
+similar rows carry a `similar · 92%` tag and a row's name opens that
+product's own popup. On phones the listing name folds under the store name
+so the price column stays on screen.
 
 ## Status dashboard (`/dash`)
 

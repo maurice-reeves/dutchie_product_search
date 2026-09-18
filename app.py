@@ -291,10 +291,12 @@ def product_detail(product_row: int):
     that store's lowest price *at the same size* as the product being viewed,
     each carrying the confidence of the match so the page can flag the shaky
     ones and let the shopper untick them. `similar` are the nearest
-    embedding neighbours outside the product's own group. Both come from
-    tables that build_similarity.py writes; on a database without them
-    (production, until the builder runs there) they are simply empty and the
-    popup shows the product alone.
+    embedding neighbours outside the product's own group; they share the
+    offers' table on the page (unticked until the shopper opts them in), so
+    each also carries its price at the size being compared when it is sold
+    in that size (`price_at_size`), else only its listed price and size.
+    Both come from tables that build_similarity.py writes; on a database
+    without them they are simply empty and the popup shows the product alone.
     """
     conn = get_conn()
     try:
@@ -316,8 +318,8 @@ def product_detail(product_row: int):
         if grp and primary:
             size_key = primary["size_key"]
             rows = conn.execute("""
-                SELECT p.id, p.name, p.brand_name, p.weight_label, p.dispensary_display, p.dispensary_slug, p.product_url,
-                       p.quantity_available, g.confidence, g.method, pp.price, pp.sale_price, pp.size_label
+                SELECT p.id, p.name, p.brand_name, p.weight_label, p.image_url, p.dispensary_display, p.dispensary_slug,
+                       p.product_url, p.quantity_available, g.confidence, g.method, pp.price, pp.sale_price, pp.size_label
                 FROM product_groups g
                 JOIN products p ON p.id = g.product_row
                 JOIN product_prices pp ON pp.product_row = p.id AND pp.size_key = ?
@@ -335,11 +337,19 @@ def product_detail(product_row: int):
                             "size_key": size_key, "size_label": primary["size_label"], "n_stores": len(offers)}
             out["offers"] = offers
 
-        out["similar"] = [dict(r) for r in conn.execute("""
+        size_key = out["group"]["size_key"] if out["group"] else None
+        similar, seen = [], set()
+        for r in conn.execute("""
             SELECT p.id, p.name, p.brand_name, p.product_type, p.weight_label, p.thc_display, p.price,
-                   p.image_url, p.dispensary_display, p.product_url, s.score
+                   p.image_url, p.dispensary_display, p.dispensary_slug, p.product_url, s.score,
+                   pp.price AS price_at_size, pp.sale_price AS sale_at_size, pp.size_label AS size_label_at_size
             FROM similar_products s JOIN products p ON p.id = s.similar_row
-            WHERE s.product_row = ? ORDER BY s.rank""", (product_row,))]
+            LEFT JOIN product_prices pp ON pp.product_row = p.id AND pp.size_key = ?
+            WHERE s.product_row = ? ORDER BY s.rank, pp.price""", (size_key, product_row)):
+            if r["id"] not in seen:                     # a size can carry two labels; keep the cheaper row
+                seen.add(r["id"])
+                similar.append(dict(r))
+        out["similar"] = similar
         return JSONResponse(out)
     finally:
         conn.close()

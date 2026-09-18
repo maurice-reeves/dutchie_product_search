@@ -743,10 +743,13 @@ function renderProduct() {
     const what = active.length === stores ? `${active.length} dispensaries` : `${active.length} listings at ${stores} dispensaries`;
     const stats = prices.length ? { min: Math.min(...prices), max: Math.max(...prices), avg: prices.reduce((a, b) => a + b, 0) / prices.length, med: median(prices) } : null;
     let verdict = '';
+    // The verdict is measured against the median: with a handful of stores
+    // and the odd wrong match, one outlier moves the average a lot and the
+    // median not at all. The average stays on the stats line.
     if (stats && mine?.checked && active.length > 1) {
-      const delta = mine.price - stats.avg;
+      const delta = mine.price - stats.med;
       const rank = active.filter(r => r.price < mine.price).length + 1;
-      verdict = `<div class="verdict ${delta <= 0 ? 'good' : 'bad'}">${money(Math.abs(delta))} ${delta <= 0 ? 'under' : 'over'} the average of ${what} — #${rank} cheapest</div>`;
+      verdict = `<div class="verdict ${delta <= 0 ? 'good' : 'bad'}">${delta === 0 ? 'Right at' : `${money(Math.abs(delta))} ${delta < 0 ? 'under' : 'over'}`} the typical price at ${what} — #${rank} cheapest</div>`;
     } else if (active.length <= 1) {
       verdict = `<div class="verdict">Only ${active.length ? 'this listing is' : 'nothing is'} being compared — tick some rows below.</div>`;
     } else {
@@ -754,7 +757,7 @@ function renderProduct() {
     }
     const pos = v => stats.max === stats.min ? 50 : (v - stats.min) / (stats.max - stats.min) * 100;
     const bar = stats && active.length > 1 ? `
-      <div class="pricebar"><i style="left:${pos(stats.avg)}%" title="average"></i>${mine?.checked ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
+      <div class="pricebar"><i style="left:${pos(stats.med)}%" title="typical price (median)"></i>${mine?.checked ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
       <div class="pricebar-ends"><span>${money(stats.min)}</span><span>${money(stats.max)}</span></div>
       <div class="stats">${[['median', stats.med], ['average', stats.avg]]
         .sort((a, b) => a[1] - b[1]).map(([k, v]) => `<span>${k} <b>${money(v)}</b></span>`).join('')}</div>` : '';

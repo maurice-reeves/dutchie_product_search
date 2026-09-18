@@ -754,7 +754,7 @@ function renderProduct() {
     const bar = stats && active.length > 1 ? `
       <div class="pricebar"><i style="left:${pos(stats.avg)}%" title="average"></i>${mine?.checked ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
       <div class="pricebar-ends"><span>${money(stats.min)}</span><span>${money(stats.max)}</span></div>
-      <div class="stats">${[['cheapest', stats.min], ['median', stats.med], ['average', stats.avg], ['priciest', stats.max]]
+      <div class="stats">${[['median', stats.med], ['average', stats.avg]]
         .sort((a, b) => a[1] - b[1]).map(([k, v]) => `<span>${k} <b>${money(v)}</b></span>`).join('')}<span>compared <b>${active.length}</b>${stores !== active.length ? ` <span class="sub">at ${stores} stores</span>` : ''}</span></div>` : '';
     // Rank ticked rows only; the list itself stays in price order so a
     // cheaper alternative is visible even before it is ticked.

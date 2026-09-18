@@ -110,10 +110,7 @@
   .card-brand { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
   .card-name { font-size: 17px; font-weight: 700; line-height: 1.25; margin-top: 2px; }
   .card-detail { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
-  .card-added { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-  /* Date headers when the list is sorted newest first; they span the grid row. */
-  .group-head { grid-column: 1 / -1; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); margin: 6px 0 -6px; }
-  .group-head:first-child { margin-top: 0; }
+  .card-added { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
   .tag {
     font-size: 10px;
     padding: 2px 7px;
@@ -500,37 +497,13 @@ function cardHTML(p) {
         ${detail ? `<div class="card-detail">${escapeHtml(detail)}</div>` : ''}
         <div class="card-footer">
           <div class="card-dispensary">${PIN}<span>${escapeHtml(p.dispensary_display)}</span></div>
-          ${p.created_at && !grouped ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
+          ${p.created_at ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
         </div>
       </div>
     </a>`;
 }
 
 const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>';
-
-/* Sorted newest first, the cards sit under date headers ("Today",
-   "Yesterday", "Sept 16") instead of each carrying an "Added" line. */
-let grouped = false;
-let lastGroup = null;
-function groupLabel(isoString) {
-  const d = new Date(isoString.replace(' ', 'T') + 'Z');
-  if (isNaN(d)) return null;
-  const days = Math.floor((new Date() - d) / 86400000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: days > 365 ? 'numeric' : undefined });
-}
-function cardsHTML(results) {
-  let html = '';
-  for (const p of results) {
-    if (grouped) {
-      const label = p.created_at ? groupLabel(p.created_at) : 'Undated';
-      if (label !== lastGroup) { html += `<div class="group-head">${escapeHtml(label)}</div>`; lastGroup = label; }
-    }
-    html += cardHTML(p);
-  }
-  return html;
-}
 
 function formatDate(isoString) {
   const d = new Date(isoString.replace(' ', 'T') + 'Z');
@@ -556,13 +529,12 @@ async function runSearch(page = 1, append = false) {
   state.total = data.total;
 
   const grid = el('grid');
-  if (!append) { grid.innerHTML = ''; lastGroup = null; }
-  grouped = el('sort').value === 'newest';
+  if (!append) grid.innerHTML = '';
 
   if (data.results.length === 0 && !append) {
     grid.innerHTML = '<div class="empty">No products match those filters.</div>';
   } else {
-    grid.insertAdjacentHTML('beforeend', cardsHTML(data.results));
+    grid.insertAdjacentHTML('beforeend', data.results.map(cardHTML).join(''));
   }
 
   const shown = (append ? grid.querySelectorAll('.card').length : data.results.length);

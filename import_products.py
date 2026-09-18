@@ -21,6 +21,9 @@ The scheduled job runs this once both scrapes have finished. What it does:
 4. Records when each (product, store) was first seen and uses that as
    created_at where the source has no date (Jane), so the card's "Added"
    date works for every store.
+5. Splits each listing name into the card's title and descriptor
+   (display_name / display_detail; see names.py). The listing name itself
+   stays in `name` for search and the popup.
 
 Environment:
     PRODUCTS_DB         database to write (default data/products.db; the
@@ -44,6 +47,7 @@ import pandas as pd
 
 import import_csv
 import import_vireo_csv
+from names import split_name
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("PRODUCTS_DB") or PROJECT_ROOT / "data" / "products.db")
@@ -282,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     dutchie = import_csv.dutchie_products(dutchie_csv)
     jane = import_vireo_csv.vireo_products(vireo_csv) if vireo_csv else None
     out, decisions, dropped = combine(dutchie, jane)
+    out["display_name"], out["display_detail"] = zip(*(split_name(n, b) for n, b in zip(out["name"], out["brand_name"])))
     if decisions:
         print("Vireo stores on the Dutchie side (Jane wins where both list the store):")
         print("\n".join(decisions))

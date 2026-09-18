@@ -21,12 +21,12 @@ from pathlib import Path
 import pandas as pd
 
 from import_csv import (
-    DB_PATH,
     PROJECT_ROOT,
     SNAPSHOT_RETENTION_DAYS,
     dispensary_slug,
     ensure_snapshot_schema,
 )
+from import_products import DB_PATH
 
 SNAPSHOT_COLUMNS = [
     "id", "dispensary", "scrapeDate",
@@ -64,7 +64,7 @@ def main(paths: list) -> int:
         sys.exit(f"No all_dispensaries*.csv found in {PROJECT_ROOT.parent}")
 
     if not DB_PATH.exists():
-        sys.exit(f"{DB_PATH} does not exist — run import_csv.py first.")
+        sys.exit(f"{DB_PATH} does not exist — run import_products.py first.")
 
     conn = sqlite3.connect(DB_PATH)
     try:

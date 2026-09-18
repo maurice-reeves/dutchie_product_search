@@ -1,38 +1,23 @@
-"""Build/refresh the local SQLite product database from a scraper output CSV.
+"""Dutchie scraper CSV -> product rows for the search database.
 
-Usage:
-    python import_csv.py [path/to/all_dispensaries*.csv]
+This module maps one all_dispensaries*.csv (~170 columns) to the columns the
+site displays and filters on; import_products.py combines the result with the
+Jane stores and writes the database. `python import_csv.py [csv]` still works
+and simply runs import_products.py for the Dutchie CSV alone.
 
-With no argument, auto-discovers the most recently modified
-all_dispensaries*.csv in the parent "Personal Projects" directory (where the
-dutchie_scraper notebook writes its output).
-
-After the database is written, the product popup's tables (same product at
-other stores, similar products) are rebuilt by running build_similarity.py
-under an interpreter that has its ML stack -- see refresh_similarity().
-
-Environment:
-    PRODUCTS_DB         database to write (default data/products.db; the
-                        same override app.py honours)
-    SIMILARITY_PYTHON   interpreter for build_similarity.py; set it to an
-                        empty string to skip the similarity refresh
+Restock tracking (product_snapshots / restock_events) lives at the bottom of
+this file. It is OFF by default -- see RESTOCK_TRACKING in import_products.py
+-- and kept intact so it can be switched back on without rewriting it.
 """
 import ast
-import os
 import re
-import shutil
 import sqlite3
-import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DB_PATH = Path(os.environ.get("PRODUCTS_DB") or PROJECT_ROOT / "data" / "products.db")
-
-# Written by build_similarity.py; read by the product popup (app.py).
-SIMILARITY_TABLES = ("product_prices", "product_groups", "group_prices", "similar_products")
 
 # Only pull the columns the search app actually displays/filters on — the
 # source CSV has ~170 columns (POS-integration-specific fields that vary per
@@ -61,15 +46,6 @@ USE_COLUMNS = [
     "POSMetaData_canonicalPackageId",
     "POSMetaData_children_quantityAvailable",
 ]
-
-# How many days of per-product snapshots to retain. 50k products/day, so 30
-# days is ~1.5M rows -- trivial for SQLite and plenty for week-over-week views.
-SNAPSHOT_RETENTION_DAYS = 30
-
-# A product that reappears with a createdAt newer than this many days is
-# treated as genuinely new rather than restocked.
-NEW_PRODUCT_WINDOW_DAYS = 2
-
 
 def find_latest_csv() -> Path:
     candidates = sorted(
@@ -150,6 +126,110 @@ def format_mg(mg) -> str:
         return ""
     mg = float(mg)
     return f"{mg / 1000:g}g" if mg >= 1000 else f"{mg:g}mg"
+
+
+def dutchie_products(csv_path: Path) -> pd.DataFrame:
+    """The product rows for one Dutchie CSV, in the database's column set."""
+    print(f"Reading {csv_path} ...")
+    df = pd.read_csv(csv_path, usecols=lambda c: c in USE_COLUMNS, low_memory=False)
+    print(f"Loaded {len(df):,} rows")
+
+    df = df[df["Name"].notna() & df["Image"].notna()].copy()
+
+    df["price"] = pd.to_numeric(df["Prices"], errors="coerce")
+    df = df[df["price"].notna()]
+
+    df["created_at"] = pd.to_datetime(df["createdAt"], errors="coerce")
+
+    df["dispensary_display"] = df["dispensary"].apply(clean_dispensary_name)
+    df["dispensary_slug"] = df["dispensary"].apply(dispensary_slug)
+    df["thc_display"] = [
+        clean_thc(v, u) for v, u in zip(df["THCContent_range"], df["THCContent_unit"])
+    ]
+
+    # Net weight in milligrams, numeric so it can be sorted/filtered on. Zero
+    # means "not reported" here, not a zero-weight product.
+    df["weight_mg"] = pd.to_numeric(
+        df["measurements_netWeight_values"].apply(first_in_list), errors="coerce"
+    )
+    df.loc[df["weight_mg"] <= 0, "weight_mg"] = None
+
+    # Display label, preferring Dutchie's own ("3.5g", "1/8oz") and falling
+    # back to formatting the milligram figure.
+    option_labels = df["Options"].apply(first_in_list)
+    df["weight_label"] = [
+        str(label) if label is not None and str(label).strip().upper() not in ("", "N/A")
+        else format_mg(mg)
+        for label, mg in zip(option_labels, df["weight_mg"])
+    ]
+    df["brand_name"] = df["brand_name"].fillna("")
+    df["type"] = df["type"].fillna("Uncategorized")
+    df["subcategory"] = df["subcategory"].fillna("")
+    df["strainType"] = df["strainType"].fillna("")
+
+    # Direct link to the product on the dispensary's own Dutchie menu.
+    # Verified against the live site: the singular /product/<cName> resolves
+    # (page title reads "<product> at <dispensary> | Dutchie") while the plural
+    # /products/<cName> does not. Falls back to the dispensary menu when the
+    # slug is missing, so a card always links somewhere useful.
+    slug = df["cName"].astype("string").str.strip()
+    dispensary_menu = df["dispensary"].apply(dispensary_slug)
+    df["product_url"] = [
+        f"https://dutchie.com/dispensary/{d}/product/{s}"
+        if isinstance(s, str) and s and isinstance(d, str) and d
+        else f"https://dutchie.com/dispensary/{d}/products"
+        for d, s in zip(dispensary_menu, slug)
+    ]
+
+    df["quantity_available"] = pd.to_numeric(
+        df.get("POSMetaData_children_quantityAvailable"), errors="coerce"
+    )
+    # Package ids are opaque identifiers that happen to look numeric ("00866246"),
+    # so keep them as strings -- leading zeros are significant.
+    df["package_id"] = df.get("POSMetaData_canonicalPackageId").astype("string")
+    df["product_id"] = df["id"].astype("string")
+    df["updated_at"] = pd.to_datetime(df["updatedAt"], errors="coerce", utc=True)
+
+    out = df.rename(columns={
+        "Name": "name",
+        "Image": "image_url",
+        "url": "dispensary_url",
+        "cName": "product_slug",
+        "scrapeDate": "scrape_date",
+        "type": "product_type",
+        "subcategory": "product_subcategory",
+        "strainType": "strain_type",
+    })[[
+        "product_id", "name", "image_url", "price", "brand_name", "product_type",
+        "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
+        "dispensary_display", "dispensary_slug", "dispensary_url", "product_url",
+        "product_slug", "scrape_date", "created_at", "updated_at",
+        "quantity_available", "package_id",
+    ]]
+
+    print(f"{len(out):,} rows have both a name, image, and parseable price")
+    return out
+
+
+# ----------------------------------------------------------------------------
+# Restock tracking -- OFF by default (RESTOCK_TRACKING=1 turns it on).
+#
+# A daily snapshot of (product, store, quantity, package) lets the next import
+# tell which products came back, were listed for the first time, arrived as a
+# new package or had their quantity go up; app.py tags search results with the
+# reason and the page shows it as a badge. The feature is switched off because
+# nobody was using the badges, not because it broke. Everything needed to run
+# it is here and in backfill_snapshots.py; record_restocks() is the entry
+# point import_products.py calls when the flag is set.
+# ----------------------------------------------------------------------------
+
+# How many days of per-product snapshots to retain. 50k products/day, so 30
+# days is ~1.5M rows -- trivial for SQLite and plenty for week-over-week views.
+SNAPSHOT_RETENTION_DAYS = 30
+
+# A product that reappears with a createdAt newer than this many days is
+# treated as genuinely new rather than restocked.
+NEW_PRODUCT_WINDOW_DAYS = 2
 
 
 def product_level(out: pd.DataFrame) -> pd.DataFrame:
@@ -270,217 +350,40 @@ def compute_restocks(conn: sqlite3.Connection, today: str, snap: pd.DataFrame) -
     return events[RESTOCK_COLUMNS]
 
 
-def drop_similarity_tables(conn: sqlite3.Connection) -> None:
-    """The popup's tables reference products by row id, and replacing the
-    products table reassigns every id. Drop them so the popup degrades to
-    "product only" (app.py checks for product_groups) rather than showing
-    another row's offers until refresh_similarity() rebuilds them."""
-    for table in SIMILARITY_TABLES:
-        conn.execute(f"DROP TABLE IF EXISTS {table}")
-
-
-def similarity_python() -> "str | None":
-    """An interpreter that can import build_similarity.py's ML stack.
-
-    The venv deliberately doesn't carry sentence-transformers/faiss/torch
-    (~1 GB); on this machine they live in the default python.org install.
-    SIMILARITY_PYTHON names one explicitly; an empty value means "skip".
-    The two imports are probed separately because torch and faiss cannot
-    share a process on macOS (see build_similarity.py).
-    """
-    explicit = os.environ.get("SIMILARITY_PYTHON")
-    if explicit is not None:
-        return explicit or None
-    for candidate in (sys.executable, shutil.which("python3"), "/usr/local/bin/python3"):
-        if not candidate or not Path(candidate).exists():
-            continue
-        if all(subprocess.run([candidate, "-c", f"import {module}"], capture_output=True).returncode == 0
-               for module in ("faiss", "sentence_transformers")):
-            return candidate
-    return None
-
-
-def refresh_similarity(csv_path: Path) -> bool:
-    """Rebuild the popup's tables for the database just written (~10 min).
-
-    Never fails the import: the products are already on disk, and without
-    these tables the popup simply shows the product alone. Returns whether
-    the tables were rebuilt.
-    """
-    python = similarity_python()
-    if python is None:
-        print("Similarity tables not refreshed: no interpreter with faiss + sentence-transformers "
-              "(set SIMILARITY_PYTHON; SIMILARITY_PYTHON= skips this quietly)")
-        return False
-    cmd = [python, str(PROJECT_ROOT / "build_similarity.py"), "all",
-           "--db", str(DB_PATH), "--dutchie-csv", str(csv_path)]
-    print(f"Refreshing similarity tables: {' '.join(cmd)}", flush=True)
-    result = subprocess.run(cmd)     # its progress goes to our stdout, i.e. the job log
-    if result.returncode != 0:
-        print(f"Similarity refresh failed (exit {result.returncode}); "
-              "the popup shows products alone until the next successful run")
-    return result.returncode == 0
-
-
-def build_database(csv_path: Path) -> None:
-    print(f"Reading {csv_path} ...")
-    df = pd.read_csv(csv_path, usecols=lambda c: c in USE_COLUMNS, low_memory=False)
-    print(f"Loaded {len(df):,} rows")
-
-    df = df[df["Name"].notna() & df["Image"].notna()].copy()
-
-    df["price"] = pd.to_numeric(df["Prices"], errors="coerce")
-    df = df[df["price"].notna()]
-
-    df["created_at"] = pd.to_datetime(df["createdAt"], errors="coerce")
-
-    df["dispensary_display"] = df["dispensary"].apply(clean_dispensary_name)
-    df["dispensary_slug"] = df["dispensary"].apply(dispensary_slug)
-    df["thc_display"] = [
-        clean_thc(v, u) for v, u in zip(df["THCContent_range"], df["THCContent_unit"])
-    ]
-
-    # Net weight in milligrams, numeric so it can be sorted/filtered on. Zero
-    # means "not reported" here, not a zero-weight product.
-    df["weight_mg"] = pd.to_numeric(
-        df["measurements_netWeight_values"].apply(first_in_list), errors="coerce"
+def record_restocks(conn: sqlite3.Connection, out: pd.DataFrame) -> list[str]:
+    """Snapshot today's products, diff against the previous snapshot and write
+    restock_events. Returns the lines to print. Idempotent for a day: today's
+    rows are replaced, and the "previous" snapshot is still whichever date
+    came before."""
+    ensure_snapshot_schema(conn)
+    snap = product_level(out)
+    today = str(out["scrape_date"].max())
+    events = compute_restocks(conn, today, snap)
+    conn.execute("DELETE FROM product_snapshots WHERE scrape_date = ?", (today,))
+    snap.assign(scrape_date=today)[
+        ["product_id", "dispensary_slug", "scrape_date", "quantity", "package_id"]
+    ].to_sql("product_snapshots", conn, if_exists="append", index=False)
+    cutoff = (pd.Timestamp(today) - pd.Timedelta(days=SNAPSHOT_RETENTION_DAYS)).date()
+    pruned = conn.execute(
+        "DELETE FROM product_snapshots WHERE scrape_date < ?", (str(cutoff),)
+    ).rowcount
+    events.to_sql("restock_events", conn, if_exists="replace", index=False)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_restock_reason ON restock_events(reason)")
+    # /api/search looks events up by product per page of results.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_restock_product "
+        "ON restock_events(product_id, dispensary_slug)"
     )
-    df.loc[df["weight_mg"] <= 0, "weight_mg"] = None
-
-    # Display label, preferring Dutchie's own ("3.5g", "1/8oz") and falling
-    # back to formatting the milligram figure.
-    option_labels = df["Options"].apply(first_in_list)
-    df["weight_label"] = [
-        str(label) if label is not None and str(label).strip().upper() not in ("", "N/A")
-        else format_mg(mg)
-        for label, mg in zip(option_labels, df["weight_mg"])
-    ]
-    df["brand_name"] = df["brand_name"].fillna("")
-    df["type"] = df["type"].fillna("Uncategorized")
-    df["subcategory"] = df["subcategory"].fillna("")
-    df["strainType"] = df["strainType"].fillna("")
-
-    # Direct link to the product on the dispensary's own Dutchie menu.
-    # Verified against the live site: the singular /product/<cName> resolves
-    # (page title reads "<product> at <dispensary> | Dutchie") while the plural
-    # /products/<cName> does not. Falls back to the dispensary menu when the
-    # slug is missing, so a card always links somewhere useful.
-    slug = df["cName"].astype("string").str.strip()
-    dispensary_menu = df["dispensary"].apply(dispensary_slug)
-    df["product_url"] = [
-        f"https://dutchie.com/dispensary/{d}/product/{s}"
-        if isinstance(s, str) and s and isinstance(d, str) and d
-        else f"https://dutchie.com/dispensary/{d}/products"
-        for d, s in zip(dispensary_menu, slug)
-    ]
-
-    df["quantity_available"] = pd.to_numeric(
-        df.get("POSMetaData_children_quantityAvailable"), errors="coerce"
-    )
-    # Package ids are opaque identifiers that happen to look numeric ("00866246"),
-    # so keep them as strings -- leading zeros are significant.
-    df["package_id"] = df.get("POSMetaData_canonicalPackageId").astype("string")
-    df["product_id"] = df["id"].astype("string")
-    df["updated_at"] = pd.to_datetime(df["updatedAt"], errors="coerce", utc=True)
-
-    out = df.rename(columns={
-        "Name": "name",
-        "Image": "image_url",
-        "url": "dispensary_url",
-        "cName": "product_slug",
-        "scrapeDate": "scrape_date",
-        "type": "product_type",
-        "subcategory": "product_subcategory",
-        "strainType": "strain_type",
-    })[[
-        "product_id", "name", "image_url", "price", "brand_name", "product_type",
-        "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
-        "dispensary_display", "dispensary_slug", "dispensary_url", "product_url",
-        "product_slug", "scrape_date", "created_at", "updated_at",
-        "quantity_available", "package_id",
-    ]]
-
-    print(f"{len(out):,} rows have both a name, image, and parseable price")
-
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        out.to_sql("products", conn, if_exists="replace", index=True, index_label="id")
-        drop_similarity_tables(conn)
-
-        conn.execute("DROP TABLE IF EXISTS products_fts")
-        conn.execute("""
-            CREATE VIRTUAL TABLE products_fts USING fts5(
-                name, brand_name, dispensary_display,
-                content='products', content_rowid='id'
-            )
-        """)
-        conn.execute("""
-            INSERT INTO products_fts(rowid, name, brand_name, dispensary_display)
-            SELECT id, name, brand_name, dispensary_display FROM products
-        """)
-
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_price ON products(price)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_type ON products(product_type)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_dispensary ON products(dispensary_display)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at)")
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS import_meta (
-                source_csv TEXT, row_count INTEGER, imported_at TEXT
-            )
-        """)
-        conn.execute("DELETE FROM import_meta")
-        conn.execute(
-            "INSERT INTO import_meta VALUES (?, ?, datetime('now'))",
-            (str(csv_path), len(out)),
-        )
-
-        # --- restock tracking -------------------------------------------------
-        ensure_snapshot_schema(conn)
-        snap = product_level(out)
-        today = str(out["scrape_date"].max())
-
-        events = compute_restocks(conn, today, snap)
-
-        # Written after the comparison, so re-running the import for the same
-        # day is idempotent: today's rows are replaced, and the "previous"
-        # snapshot is still whichever date came before.
-        conn.execute("DELETE FROM product_snapshots WHERE scrape_date = ?", (today,))
-        snap.assign(scrape_date=today)[
-            ["product_id", "dispensary_slug", "scrape_date", "quantity", "package_id"]
-        ].to_sql("product_snapshots", conn, if_exists="append", index=False)
-
-        cutoff = (pd.Timestamp(today) - pd.Timedelta(days=SNAPSHOT_RETENTION_DAYS)).date()
-        pruned = conn.execute(
-            "DELETE FROM product_snapshots WHERE scrape_date < ?", (str(cutoff),)
-        ).rowcount
-
-        events.to_sql("restock_events", conn, if_exists="replace", index=False)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_restock_reason ON restock_events(reason)"
-        )
-        # /api/search looks events up by product per page of results.
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_restock_product "
-            "ON restock_events(product_id, dispensary_slug)"
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    print(f"Wrote {DB_PATH} ({len(out):,} products)")
-    print(f"Snapshot recorded for {today}: {len(snap):,} products"
-          + (f", pruned {pruned:,} rows older than {SNAPSHOT_RETENTION_DAYS} days" if pruned > 0 else ""))
+    lines = [f"Snapshot recorded for {today}: {len(snap):,} products"
+             + (f", pruned {pruned:,} rows older than {SNAPSHOT_RETENTION_DAYS} days" if pruned > 0 else "")]
     if not events.empty:
         counts = events["reason"].value_counts()
-        print("Restock events: " + ", ".join(f"{n:,} {r}" for r, n in counts.items()))
+        lines.append("Restock events: " + ", ".join(f"{n:,} {r}" for r, n in counts.items()))
+    return lines
 
 
 if __name__ == "__main__":
-    csv_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    path = Path(csv_arg).expanduser() if csv_arg else find_latest_csv()
-    if not path.exists():
-        sys.exit(f"CSV not found: {path}")
-    build_database(path)
-    refresh_similarity(path)
+    # Kept for muscle memory: the database is built by import_products.py.
+    import import_products
+    args = ["--no-vireo"] + (["--dutchie", sys.argv[1]] if len(sys.argv) > 1 else [])
+    raise SystemExit(import_products.main(args))

@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-"""Build a dev search database that adds Vireo's Jane stores to the Dutchie index.
+"""Vireo (Jane) scraper CSV -> product rows for the search database.
 
-    ./.venv/bin/python import_vireo_csv.py ../vireo_products20260917_075024.csv
-    PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
-
-Reads the CSV that dutchie_scraper's ``scrape_vireo_dispensaries.py`` writes,
-maps Jane's record shape onto the ``products`` table that ``app.py`` serves,
-appends it to a *copy* of the production index, and writes ``data/products_dev.db``.
-Production (``products.db``, ``import_csv.py``) is not touched.
+Reads the CSV that dutchie_scraper's ``scrape_vireo_dispensaries.py`` writes
+and maps Jane's record shape onto the ``products`` columns ``app.py`` serves.
+``import_products.py`` combines the result with the Dutchie rows and writes
+the database; this module has no entry point of its own.
 
 Mapping decisions (see ``PRODUCT_TYPE`` / ``SUBCATEGORY`` below for the vocabularies):
 
@@ -19,21 +15,16 @@ Mapping decisions (see ``PRODUCT_TYPE`` / ``SUBCATEGORY`` below for the vocabula
   else the ``dosage`` string (edibles: "100mg", "100mg CBD/100mg THC").
 * The weight label comes from ``available_weights`` (Dutchie-style labels:
   1g, 1/8oz, ...), falling back to Jane's ``amount`` ("10pk", "1000mg").
-* No creation/update dates or package ids exist on Jane; those stay null.
+* No creation/update dates or package ids exist on Jane. ``created_at`` is
+  filled in by import_products.py with the date we first saw the product.
 """
 from __future__ import annotations
 
 import ast
 import re
-import sqlite3
-import sys
 from pathlib import Path
 
 import pandas as pd
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-PROD_DB = PROJECT_ROOT / "data" / "products.db"
-DEV_DB = PROJECT_ROOT / "data" / "products_dev.db"
 
 # Jane `kind` -> Dutchie `product_type`
 PRODUCT_TYPE = {
@@ -188,58 +179,3 @@ def vireo_products(csv_path: Path) -> pd.DataFrame:
     })
     out.loc[out["weight_mg"] <= 0, "weight_mg"] = None
     return out.reset_index(drop=True)
-
-
-def main(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print(__doc__)
-        return 2
-    csv_path = Path(argv[1]).expanduser().resolve()
-    dev_db = Path(argv[2]).expanduser().resolve() if len(argv) > 2 else DEV_DB
-
-    vireo = vireo_products(csv_path)
-    print("Vireo types:", vireo["product_type"].value_counts().to_dict())
-
-    prod = sqlite3.connect(PROD_DB)
-    dutchie = pd.read_sql("SELECT * FROM products", prod, index_col="id")
-    restock = pd.read_sql("SELECT * FROM restock_events", prod) if prod.execute(
-        "SELECT name FROM sqlite_master WHERE name='restock_events'").fetchone() else None
-    meta = prod.execute("SELECT source_csv, row_count FROM import_meta").fetchone()
-    prod.close()
-    print(f"{len(dutchie):,} Dutchie rows from {PROD_DB.name}")
-
-    combined = pd.concat([dutchie.reset_index(drop=True), vireo], ignore_index=True)
-    # Same naive-UTC text prod writes ("2025-09-22 16:14:38.341000"); the page's
-    # date parser doesn't understand a "+00:00" suffix and would print the raw
-    # timestamp on the card.
-    for col in ("created_at", "updated_at"):
-        combined[col] = pd.to_datetime(combined[col], errors="coerce", utc=True).dt.tz_localize(None)
-
-    dev_db.parent.mkdir(parents=True, exist_ok=True)
-    if dev_db.exists():
-        dev_db.unlink()
-    conn = sqlite3.connect(dev_db)
-    try:
-        combined.to_sql("products", conn, if_exists="replace", index=True, index_label="id")
-        conn.execute("""CREATE VIRTUAL TABLE products_fts USING fts5(
-                            name, brand_name, dispensary_display, content='products', content_rowid='id')""")
-        conn.execute("""INSERT INTO products_fts(rowid, name, brand_name, dispensary_display)
-                        SELECT id, name, brand_name, dispensary_display FROM products""")
-        for col in ("price", "product_type", "dispensary_display", "created_at"):
-            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_products_{col} ON products({col})")
-        conn.execute("CREATE TABLE import_meta (source_csv TEXT, row_count INTEGER, imported_at TEXT)")
-        conn.execute("INSERT INTO import_meta VALUES (?, ?, datetime('now'))",
-                     (f"{meta[0]} + {csv_path}", len(combined)))
-        if restock is not None:
-            restock.to_sql("restock_events", conn, if_exists="replace", index=False)
-            conn.execute("CREATE INDEX idx_restock_product ON restock_events(product_id, dispensary_slug)")
-        conn.commit()
-    finally:
-        conn.close()
-    print(f"Wrote {dev_db} ({len(combined):,} products: {len(dutchie):,} Dutchie + {len(vireo):,} Vireo, "
-          f"{combined['dispensary_display'].nunique()} dispensaries)")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))

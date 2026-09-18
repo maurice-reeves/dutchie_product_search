@@ -18,15 +18,18 @@ already produced; it does not import or depend on that package.
 ## How it works
 
 ```
-all_dispensaries*.csv        import_csv.py            app.py (FastAPI)         static/index.html
-(scraper output, ~170 cols) ───────────────▶  data/products.db  ──────────▶  /api/*  ──────────▶  browser UI
-                             extract 15 cols   products + FTS5              JSON search           vanilla JS
+all_dispensaries*.csv  ─┐   import_products.py        app.py (FastAPI)         static/index.html
+(Dutchie stores)        ├──────────────────▶  data/products.db  ──────────▶  /api/*  ──────────▶  browser UI
+vireo_products*.csv    ─┘   one products table   products + FTS5            JSON search           vanilla JS
+(Vireo's Jane stores)       Jane wins overlaps   + popup tables
 ```
 
-1. **`import_csv.py`** — reads the CSV with pandas, keeps only the ~15
-   columns the UI needs (the source CSV has ~170 POS-specific columns and
-   can be 100 MB+), cleans a few fields, and writes `data/products.db`.
-   It also records a daily snapshot and computes restock events (below).
+1. **`import_products.py`** — the nightly import. Maps each scraper's CSV to
+   the same ~20 product columns (`import_csv.py` for Dutchie's ~170-column
+   CSV, `import_vireo_csv.py` for Jane's), merges them — when a store is on
+   both platforms the Jane copy wins — writes `data/products.db`, records
+   when each product was first seen, and rebuilds the product popup's
+   tables (`build_similarity.py`). See [Combining the two sources](#combining-the-two-sources).
 2. **`app.py`** — a FastAPI app that queries `products.db` on every
    request (the DB file is opened fresh per request, so re-importing does
    not require a server restart) and also serves the static frontend.
@@ -57,17 +60,56 @@ are excluded from the database.
 - **`products_fts`** — an FTS5 virtual table over `name`, `brand_name`,
   and `dispensary_display`, contentless (mirrors `products` by rowid).
   Powers the free-text search box with prefix matching.
-- **`import_meta`** — a single row: `source_csv`, `row_count`,
+- **`import_meta`** — a single row: `source_csv` (both CSVs), `row_count`,
   `imported_at`. Shown under the page title as "Refreshed …".
-- **`product_snapshots`** — append-only, one row per product per scrape
-  date (`product_id`, `dispensary_slug`, `scrape_date`, `quantity`,
-  `package_id`). Survives `products` being replaced on each import, and is
-  pruned to 30 days. This is what makes restock detection possible.
-- **`restock_events`** — rebuilt each import: what changed versus the
-  previous snapshot, classified `returned` / `new_listing` /
-  `new_package` / `quantity_up`.
+- **`first_seen`** — `(product_id, dispensary_slug) → first_seen`, the date
+  a product first turned up in a scrape; never overwritten, survives
+  `products` being replaced. Jane gives no creation date, so Jane rows get
+  their `created_at` (the card's "Added" line, the "Newest first" sort) from
+  here; Dutchie rows keep Dutchie's own `createdAt`.
+- **`product_prices`, `product_groups`, `group_prices`, `similar_products`**
+  — the product popup's tables, written by `build_similarity.py`
+  ([below](#product-popup-same-product-elsewhere-similar-products)).
+- **`product_snapshots`** / **`restock_events`** — restock tracking, off by
+  default ([below](#restock-tracking-off-by-default)).
 
-### Restock tracking
+### Combining the two sources
+
+Vireo Growth's Colorado chains (The Green Solution, Medicine Man, LivWell,
+Star Buds / Standing Akimbo, Every Day Weed, Green Dragon) are moving their
+menus from Dutchie to Jane, and during the move a store can be on both —
+with the Jane menu the live, fuller one. `import_products.py` therefore
+drops a Dutchie store when the Jane CSV has the same store, and prints each
+decision:
+
+```
+Vireo stores on the Dutchie side (Jane wins where both list the store):
+  Tgs Wewatta (Dutchie) -> replaced by The Green Solution - Wewatta (Jane)
+  Tgs Malley (Dutchie) kept: no matching Jane store
+```
+
+"Same store" means the same brand *and* the same location words: the brand
+is recognised from either platform's spelling (`Tgs` / `The Green Solution`,
+`EDW` / `Every Day Weed`, `SB` / `Star Buds`, …), then words like
+*Denver*, *Rec*, *Med*, *Ave* are ignored and the remaining words of one
+name must all appear in the other (`Tgs Edgewater` ↔ `The Green Solution -
+Edgewater (20th)`). Stores of any other brand are never touched, and a
+Vireo store with no Jane counterpart is kept from Dutchie.
+
+The Vireo CSV is used only if it is from within `VIREO_MAX_AGE_DAYS` (3) of
+the Dutchie CSV — the Jane job runs right after the Dutchie one, so an older
+file means it failed that day, and the import then says so and carries on
+with Dutchie stores only.
+
+### Restock tracking (off by default)
+
+Switched off — nobody was using the badges — but kept intact: the code is
+at the bottom of `import_csv.py` (`record_restocks`) plus
+`backfill_snapshots.py`, `app.py` still tags results when a `restock_events`
+table exists, and the page still shows the badge. `RESTOCK_TRACKING=1` on
+the import turns it back on; expect a noisy first day, since the previous
+snapshot will be weeks old. While off, `restock_events` is dropped at each
+import (it would go stale) and `product_snapshots` is left as it was.
 
 `createdAt` never changes once a product exists, so it identifies new
 products but says nothing about restocks. The signals that do are a product
@@ -96,8 +138,9 @@ daily import.
 Requires Python 3.9+ and (for the public-tunnel feature) `cloudflared`.
 
 > The database is refreshed automatically after each scheduled scrape —
-> `dutchie_scraper` runs `import_csv.py` itself once its CSV is written, and
-> `import_csv.py` then rebuilds the product popup's tables (see
+> `dutchie_scraper`'s wrapper runs `import_products.py` once both its jobs
+> (Dutchie, then Vireo/Jane) have written their CSVs, and the import then
+> rebuilds the product popup's tables (see
 > [Keeping the popup's tables fresh](#keeping-the-popups-tables-fresh)). The
 > manual steps below are for a first build or an ad-hoc refresh.
 
@@ -114,22 +157,30 @@ Dependencies: `pandas`, `fastapi`, `uvicorn[standard]`.
 
 ### 1. Build / refresh the database
 
-Auto-discovers the most recently modified `all_dispensaries*.csv` in the
-parent `Personal Projects/` directory (where the scraper writes its
-output), or takes an explicit path:
+Auto-discovers the newest `all_dispensaries*.csv` and `vireo_products*.csv`
+in the parent `Personal Projects/` directory (where both scrapers write), or
+takes explicit paths:
 
 ```bash
-./.venv/bin/python import_csv.py
-# or
-./.venv/bin/python import_csv.py /path/to/all_dispensaries_2026-08-27.csv
+./.venv/bin/python import_products.py
+./.venv/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv --vireo ../vireo_products20260918_071219.csv
+./.venv/bin/python import_products.py --no-vireo          # Dutchie stores only
+./.venv/bin/python import_products.py --no-similarity     # skip the popup tables (seconds instead of minutes)
 ```
 
-It prints the row counts at each stage and the final DB path, then runs
-`build_similarity.py` for the popup (about ten more minutes; skip it with
-`SIMILARITY_PYTHON=`). Re-run this any time you have a fresh scrape.
-`PRODUCTS_DB=path` writes somewhere other than `data/products.db` — the
-same override `app.py` accepts, so a scratch database can be built and
-served without touching the live one.
+It prints the row counts, the store-overlap decisions and the final DB
+path, then runs `build_similarity.py` for the popup (15–20 more minutes;
+`--no-similarity` or `SIMILARITY_PYTHON=` skips it). Re-run this any time
+you have a fresh scrape. `PRODUCTS_DB=path` writes somewhere other than
+`data/products.db` — the same override `app.py` accepts, so a scratch
+database can be built and served without touching the live one:
+
+```bash
+PRODUCTS_DB=data/products_dev.db ./.venv/bin/python import_products.py
+PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
+```
+
+`python import_csv.py [csv]` still works and is the same as `--no-vireo`.
 
 ### 2. Start the server
 
@@ -145,24 +196,16 @@ served without touching the live one.
 Re-importing new data does **not** need a server restart — just refresh
 the page.
 
-### 4. Adding Vireo's Jane stores (dev database)
+### 4. Vireo's Jane stores
 
 Vireo Growth's Colorado chains — The Green Solution, Medicine Man, LivWell,
 Star Buds / Standing Akimbo, Every Day Weed, Green Dragon — sell through
-**Jane** storefronts, not Dutchie, so `import_csv.py` never sees them. The
-scraper's `scripts/scrape_vireo_dispensaries.py` writes their menus to
-`vireo_products<stamp>.csv` (~35k products from 51 Denver-area stores), and
-`import_vireo_csv.py` folds that into a **separate dev database** so the
-combined index can be reviewed without touching production:
-
-```bash
-./.venv/bin/python import_vireo_csv.py ../vireo_products20260917_075024.csv
-PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
-```
-
-`products_dev.db` is a copy of `products.db` plus the Vireo rows (87k
-products, 187 dispensaries as of Sept 2026). `PRODUCTS_DB` is the only
-switch; with it unset, `app.py` serves `data/products.db` as always.
+**Jane** storefronts, not Dutchie. The scraper's
+`scripts/scrape_vireo_dispensaries.py` writes their menus to
+`vireo_products<stamp>.csv` (~35k products from 52 Denver-area stores), and
+`import_products.py` folds that into the same database as the Dutchie
+stores (86k products, 182 dispensaries as of Sept 2026). `import_vireo_csv.py`
+holds the column mapping.
 
 #### Jane → `products` column mapping
 
@@ -185,14 +228,15 @@ merge. The decisions, for when the mapping needs revisiting:
 | `dispensary_display` / `dispensary_slug` | `storeName` / slug of it | store names come from Jane's own store list (`list_stores`) |
 | `dispensary_url` | `url` | `https://www.<brand>/shop/store/<id>/shop-all` |
 | `product_url` / `product_slug` | `product_id` + `url_slug` | `https://www.<brand>/shop/products/<product_id>/<url_slug>` |
-| `product_id` | `product_id` | stable across days, so the *returned* restock signal works once snapshots exist |
+| `product_id` | `product_id` | stable across days — the key for `first_seen` (and for restock tracking, if enabled) |
 | `quantity_available` | `max_cart_quantity` | Jane caps the cart at stock on hand — a proxy, not a count |
 | `scrape_date` | `scrapeDate` | |
-| `created_at`, `updated_at`, `package_id` | — | Jane exposes none of these. Vireo cards show no "Added" line, don't rank under "Newest first", and can't produce the *new package* restock signal |
+| `created_at` | `first_seen` table | Jane has no creation date; `import_products.py` fills in the date we first saw the product, so the card's "Added" line and "Newest first" work |
+| `updated_at`, `package_id` | — | Jane exposes neither (no *new package* restock signal) |
 
-Dates are written as naive UTC text (`2025-09-22 16:14:38.341000`), the
-format `import_csv.py` uses — the page's date parser doesn't accept a
-`+00:00` suffix and would print the raw timestamp on the card.
+Dates are written as naive UTC text (`2025-09-22 16:14:38.341000`) for
+both sources — the page's date parser doesn't accept a `+00:00` suffix and
+would print the raw timestamp on the card.
 
 ---
 
@@ -300,8 +344,8 @@ behind it is built offline by `build_similarity.py`, so the site itself only
 reads four extra tables:
 
 ```bash
-/usr/local/bin/python3 build_similarity.py all --db data/products_dev.db      # ~12 min: embed, index, groups
-/usr/local/bin/python3 build_similarity.py groups --db data/products_dev.db   # ~2 min when embeddings exist
+/usr/local/bin/python3 build_similarity.py all --db data/products.db      # ~20 min: embed, index, groups
+/usr/local/bin/python3 build_similarity.py groups --db data/products.db   # ~3 min when embeddings exist
 ```
 
 It runs under the **default** Python (which has `sentence-transformers`,
@@ -312,16 +356,17 @@ importing both in one process segfaults on macOS.
 ### Keeping the popup's tables fresh
 
 The four tables reference products by **row id**, and every import replaces
-the `products` table and reassigns the ids. So `import_csv.py`:
+the `products` table and reassigns the ids. So `import_products.py`:
 
 1. drops the four tables right after writing `products` — the popup then
    shows the product alone (it checks for `product_groups`) instead of
    another row's offers;
 2. runs `build_similarity.py all` for the new database once the import is
-   done, under the first interpreter it finds that can import both `faiss`
-   and `sentence_transformers` (the venv, `python3` on `PATH`, then
+   done (both CSVs passed along for the per-size prices), under the first
+   interpreter it finds that can import both `faiss` and
+   `sentence_transformers` (the venv, `python3` on `PATH`, then
    `/usr/local/bin/python3`). `SIMILARITY_PYTHON=/path/to/python` names one
-   explicitly; `SIMILARITY_PYTHON=` (empty) skips the rebuild.
+   explicitly; `SIMILARITY_PYTHON=` (empty) or `--no-similarity` skips it.
 
 A failed or skipped rebuild never fails the import — the products are
 already on disk — it just leaves the popup in "product only" mode until the
@@ -451,8 +496,9 @@ falls back to `id` order. Response:
 
 ```
 app.py                 FastAPI search API + static file mount (PRODUCTS_DB overrides the DB)
-import_csv.py          Dutchie CSV → SQLite builder (run to (re)build the DB)
-import_vireo_csv.py    Vireo/Jane CSV → data/products_dev.db (prod + Vireo, for review)
+import_products.py     nightly import: both CSVs → data/products.db, first-seen dates, popup tables
+import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
+import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
 tests/                 pytest for the matching rules (/usr/local/bin/python3 -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
@@ -466,10 +512,10 @@ logs/                  uvicorn.log, cloudflared.log; git-ignored
 
 ## Troubleshooting
 
-- **"No all_dispensaries*.csv files found"** — pass the CSV path
-  explicitly as an argument to `import_csv.py`.
+- **"Dutchie CSV not found"** — pass the CSV path explicitly:
+  `import_products.py --dutchie <csv>` (and `--vireo <csv>`).
 - **UI header shows no product count** — `data/products.db` is missing or
-  empty; run `import_csv.py`.
+  empty; run `import_products.py`.
 - **Public URL "not found yet"** — check `logs/cloudflared.log`; the
   tunnel may still be connecting, or `cloudflared` is not installed.
 - **Port 8000 already in use** — an old `uvicorn` is still running;

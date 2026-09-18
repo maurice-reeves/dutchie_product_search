@@ -299,7 +299,8 @@
   .offers th.num { text-align: right; }
   .offers td { padding: 6px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
   .offers td.rank { color: var(--text-muted); width: 28px; text-align: right; }
-  .offers td.listed { color: var(--text-muted); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .offers td.listed { color: var(--text-muted); font-size: 12px; max-width: 300px; }
+  .offers td.listed .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
   .offers td.size { white-space: nowrap; color: var(--text-muted); }
   .offers tr.me td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
   .offers tr.off td { color: var(--text-muted); }
@@ -309,7 +310,6 @@
   .offers a { color: inherit; }
   .offers .lowconf { font-size: 10px; color: #c2410c; margin-left: 6px; }
   .offers .tag { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); margin-left: 6px; white-space: nowrap; }
-  .offers td.listed img { width: 26px; height: 26px; object-fit: contain; border-radius: 4px; background: var(--surface); vertical-align: middle; margin-right: 6px; }
   .offers td.listed a.open { color: inherit; text-decoration: none; }
   .offers td.listed a.open:hover { color: var(--accent); text-decoration: underline; }
   .offers td.size.other { color: #c2410c; }
@@ -318,10 +318,9 @@
   @media (max-width: 640px) {
     /* Keep the price on screen: the listing name moves under the store name. */
     .offers th.listed, .offers td.listed, .offers th.rank, .offers td.rank { display: none; }
-    .offers td.store .alt { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 2px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .offers td.store .alt img { width: 18px; height: 18px; object-fit: contain; border-radius: 3px; background: var(--surface); vertical-align: middle; margin-right: 4px; }
+    .offers td.store .alt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 2px; max-width: 50vw; line-height: 1.3; word-break: break-word; }
     .offers td.store .alt a { color: inherit; text-decoration: none; }
-    .offers td.store { max-width: 44vw; }
+    .offers td.store { max-width: 50vw; }
     .offers th.view, .offers td.view { display: none; }     /* the name opens the product; the hero button reaches the store */
     .offers td.num { white-space: normal; }                  /* "sale $x" may wrap under the price */
     .offers td.num .sub { display: block; }
@@ -755,7 +754,8 @@ function renderProduct() {
     const bar = stats && active.length > 1 ? `
       <div class="pricebar"><i style="left:${pos(stats.avg)}%" title="average"></i>${mine?.checked ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
       <div class="pricebar-ends"><span>${money(stats.min)}</span><span>${money(stats.max)}</span></div>
-      <div class="stats"><span>average <b>${money(stats.avg)}</b></span><span>median <b>${money(stats.med)}</b></span><span>cheapest <b>${money(stats.min)}</b></span><span>compared <b>${active.length}</b>${stores !== active.length ? ` <span class="sub">at ${stores} stores</span>` : ''}</span></div>` : '';
+      <div class="stats">${[['cheapest', stats.min], ['median', stats.med], ['average', stats.avg], ['priciest', stats.max]]
+        .sort((a, b) => a[1] - b[1]).map(([k, v]) => `<span>${k} <b>${money(v)}</b></span>`).join('')}<span>compared <b>${active.length}</b>${stores !== active.length ? ` <span class="sub">at ${stores} stores</span>` : ''}</span></div>` : '';
     // Rank ticked rows only; the list itself stays in price order so a
     // cheaper alternative is visible even before it is ticked.
     let n = 0;
@@ -765,14 +765,17 @@ function renderProduct() {
     const shown = rows.slice(0, limit);
     const mineIdx = rows.findIndex(r => r.is_this);
     if (mineIdx >= limit) shown.push({ gap: true, skipped: mineIdx - limit }, rows[mineIdx]);
-    const listed = r => `${r.image_url ? `<img src="${escapeAttr(r.image_url)}" alt="" loading="lazy">` : ''}${r.is_this ? escapeHtml(r.name)
-      : `<a class="open" href="#p=${r.id}" data-open="${r.id}" title="open this product">${escapeHtml(r.kind === 'similar' && r.brand_name ? r.brand_name + ' — ' : '')}${escapeHtml(r.name)}</a>`}`;
+    // Similar rows name their brand, unless the name already starts with it
+    // ("Lazercat Cannabis — Lazercat Live Rosin …" says it twice).
+    const brandOf = r => r.kind === 'similar' && r.brand_name && !r.name.toLowerCase().startsWith(r.brand_name.toLowerCase().split(' ')[0]) ? r.brand_name + ' — ' : '';
+    const listed = r => r.is_this ? escapeHtml(r.name)
+      : `<a class="open" href="#p=${r.id}" data-open="${r.id}" title="open this product">${escapeHtml(brandOf(r))}${escapeHtml(r.name)}</a>`;
     const trs = shown.map(r => r.gap ? `<tr class="gap"><td colspan="7">… ${r.skipped} more ${r.skipped === 1 ? 'listing' : 'listings'} …</td></tr>` : `
       <tr class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}">
         <td class="chk"><input type="checkbox" data-row="${r.id}" data-kind="${r.kind}" ${r.checked ? 'checked' : ''} aria-label="include in comparison"></td>
         <td class="rank">${rankOf.get(r.id) ?? ''}</td>
         <td class="store">${escapeHtml(r.dispensary_display)}${r.kind === 'similar' ? `<span class="tag" title="a different product the matcher found similar">similar · ${Math.round(r.score * 100)}%</span>` : (r.confidence < 0.9 ? '<span class="lowconf" title="matched by name similarity, not an exact key">likely the same</span>' : '')}<span class="alt">${listed(r)}</span></td>
-        <td class="listed" title="${escapeAttr(r.name)}">${listed(r)}</td>
+        <td class="listed" title="${escapeAttr(r.name)}"><div class="clamp">${listed(r)}</div></td>
         <td class="size ${r.otherSize ? 'other' : ''}" ${r.otherSize ? `title="only sold in this size — not the ${escapeAttr(sizeText(g, g.size_label) || 'compared')} size"` : ''}>${escapeHtml(r.size)}${r.otherSize ? ' ≠' : ''}</td>
         <td class="num">${money(r.price)}${r.sale_price ? ` <span class="sub">sale ${money(r.sale_price)}</span>` : ''}</td>
         <td class="num view"><a href="${escapeAttr(r.product_url)}" target="_blank" rel="noopener">view</a></td>

@@ -53,9 +53,35 @@ vireo_products*.csv    ─┘   one products table   products + FTS5            
 Rows without a `Name`, without an `Image`, or without a parseable price
 are excluded from the database.
 
+#### Card titles (`display_name`, `display_detail`)
+
+Menus write names every which way — `Malek's | 1g Live Resin Batter |
+Juicy (H)`, `REC: Craft Sour Diesel 510 Cartridge Distillate`, `Wyld Gummies
+Hybrid Huckleberry 100mg` — so the card shows a title and a descriptor that
+`names.py` pulls apart at import time for both sources:
+
+| Listing name | `display_name` | `display_detail` |
+| --- | --- | --- |
+| `Malek's \| 1g Live Resin Batter \| Juicy (H)` | Juicy (H) | Live resin batter |
+| `REC: Craft Sour Diesel 510 Cartridge Distillate` | Sour Diesel | REC · 510 cartridge distillate |
+| `Wyld Gummies Hybrid Huckleberry 100mg` | Huckleberry | Gummies hybrid |
+| `Black Maple #22 \| 500MG \| Rosin Cartridge` | Black Maple #22 | Rosin cartridge |
+
+The brand and any sizes are removed, the name is cut into segments at
+`|`, ` - `, `:` and brackets, and the segment made mostly of words the
+matcher's vocabulary does *not* know (`build_similarity.GENERIC` plus the
+extra menu words in `names.DESCRIPTOR`) is the product; the rest is the
+descriptor, with the card adding the type and size after it. A
+single-segment name is split only when its unknown words sit together at
+one end; otherwise it is shown whole rather than scrambled, and the title
+is never empty. The listing name stays in `name` for search and for the
+popup's "Listed as" column. `python names.py --backfill data/products.db`
+adds the two columns to an existing database without touching row ids.
+
 ### Database schema (`data/products.db`)
 
-- **`products`** — one row per product, keyed by an integer `id`.
+- **`products`** — one row per product, keyed by an integer `id`; includes
+  the card's `display_name` / `display_detail` (above).
   Indexed on `price`, `product_type`, `dispensary_display`, `created_at`.
 - **`products_fts`** — an FTS5 virtual table over `name`, `brand_name`,
   and `dispensary_display`, contentless (mirrors `products` by rowid).
@@ -497,6 +523,7 @@ falls back to `id` order. Response:
 ```
 app.py                 FastAPI search API + static file mount (PRODUCTS_DB overrides the DB)
 import_products.py     nightly import: both CSVs → data/products.db, first-seen dates, popup tables
+names.py               listing name → card title + descriptor (used by the import; --backfill for an existing db)
 import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
 import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)

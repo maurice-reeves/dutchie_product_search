@@ -106,11 +106,11 @@
     transition: transform 0.12s ease;
   }
   .card:hover { transform: translateY(-2px); }
-  .card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-  .card-name { font-size: 14px; font-weight: 600; line-height: 1.3; }
-  .card-brand { font-size: 12px; color: var(--text-muted); }
-  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
-  .card-added { font-size: 11px; color: var(--text-muted); }
+  .card-body { padding: 14px 16px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .card-brand { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+  .card-name { font-size: 17px; font-weight: 700; line-height: 1.25; margin-top: 2px; }
+  .card-detail { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+  .card-added { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
   .tag {
     font-size: 10px;
     padding: 2px 7px;
@@ -119,9 +119,13 @@
     border: 1px solid var(--border);
     color: var(--text-muted);
   }
-  .card-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; }
-  .card-price { font-size: 16px; font-weight: 700; color: var(--accent); }
-  .card-dispensary { font-size: 11px; color: var(--text-muted); text-align: right; max-width: 55%; }
+  /* Price top-right beside the name, dispensary bottom-right beside the
+     "Added" line, so the two columns of the card carry equal weight. */
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card-price { font-size: 19px; font-weight: 700; color: var(--accent); white-space: nowrap; margin-top: 10px; }
+  .card-footer { margin-top: auto; padding-top: 4px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .card-dispensary { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .card-dispensary svg { flex: none; width: 13px; height: 13px; fill: currentColor; opacity: .8; }
   .load-more {
     display: block;
     margin: 14px auto 0;
@@ -476,25 +480,30 @@ function cardHTML(p) {
   // Category and weight only. Subcategory, strain type and THC are all still
   // in the database and searchable — they're just not shown as tags, which
   // were crowding the card.
-  const tags = [p.product_type, p.weight_label]
-    .filter(Boolean)
-    .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
-    .join('');
+  // Title and descriptor come from the importer's split of the listing name
+  // (names.py); the type and size join the descriptor line.
+  const detail = [p.display_detail, p.product_type, p.weight_label].filter(Boolean).join(' · ');
   return `
     <a class="card" href="#p=${p.id}" data-id="${p.id}">
       <div class="card-body">
         ${restockBadge(p)}
-        <div class="card-name">${escapeHtml(p.name)}</div>
-        ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
-        <div class="card-tags">${tags}</div>
-        ${p.created_at ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
-        <div class="card-footer">
+        <div class="card-head">
+          <div>
+            ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
+            <div class="card-name">${escapeHtml(p.display_name || p.name)}</div>
+          </div>
           <div class="card-price">$${p.price.toFixed(2)}</div>
-          <div class="card-dispensary">${escapeHtml(p.dispensary_display)}</div>
+        </div>
+        ${detail ? `<div class="card-detail">${escapeHtml(detail)}</div>` : ''}
+        <div class="card-footer">
+          <div class="card-dispensary">${PIN}<span>${escapeHtml(p.dispensary_display)}</span></div>
+          ${p.created_at ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
         </div>
       </div>
     </a>`;
 }
+
+const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>';
 
 function formatDate(isoString) {
   const d = new Date(isoString.replace(' ', 'T') + 'Z');

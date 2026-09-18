@@ -268,6 +268,59 @@
   .reason-new_package { border-color: #a855f7; color: #a855f7; }
   .reason-quantity_up { border-color: #f59e0b; color: #f59e0b; }
   .card-change { font-size: 12px; color: var(--text-muted); }
+
+  /* ---- Product popup ---- */
+  .modal.product { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; }
+  .product .hero { display: flex; gap: 18px; padding: 20px 20px 16px; border-bottom: 1px solid var(--border); position: relative; }
+  .product .hero img { width: 120px; height: 120px; object-fit: contain; border-radius: 8px; background: var(--bg); flex: none; }
+  .product .hero .info { min-width: 0; flex: 1; padding-right: 24px; }
+  .product .hero .name { font-size: 17px; font-weight: 700; line-height: 1.3; margin: 2px 0 4px; }
+  .product .sub { font-size: 12px; color: var(--text-muted); }
+  .product .hero .big { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 8px; }
+  .product .hero .close { position: absolute; top: 12px; right: 14px; }
+  .product .visit {
+    display: inline-block; margin-top: 10px; padding: 7px 14px; border-radius: 8px;
+    background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600; text-decoration: none;
+  }
+  .product section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .product section:last-child { border-bottom: 0; }
+  .product h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
+  .product .verdict { font-size: 15px; font-weight: 600; margin: 4px 0 10px; }
+  .product .verdict.good { color: var(--accent); }
+  .product .verdict.bad { color: #c2410c; }
+  .product .stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+  .product .stats b { color: var(--text); font-weight: 600; }
+  .pricebar { position: relative; height: 8px; border-radius: 4px; background: var(--border); margin: 12px 0 4px; }
+  .pricebar i { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: var(--text-muted); }
+  .pricebar i.me { background: var(--accent); width: 6px; top: -5px; height: 18px; }
+  .pricebar-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+  .offers { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  .offers th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .offers th.num { text-align: right; }
+  .offers td { padding: 6px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .offers td.rank { color: var(--text-muted); width: 28px; text-align: right; }
+  .offers td.listed { color: var(--text-muted); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .offers td.size { white-space: nowrap; color: var(--text-muted); }
+  .offers tr.me td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+  .offers tr.off td { color: var(--text-muted); text-decoration: line-through; }
+  .offers tr.off td.chk { text-decoration: none; }
+  .offers td.chk { width: 22px; }
+  .offers td.num { text-align: right; white-space: nowrap; }
+  .offers a { color: inherit; }
+  .offers .lowconf { font-size: 10px; color: #c2410c; margin-left: 6px; }
+  .offers .listed { font-size: 11px; color: var(--text-muted); display: block; }
+  .offers tr.gap td { text-align: center; color: var(--text-muted); font-size: 11px; padding: 2px; }
+  .showall { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 6px 0; }
+  .similar { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .simcard { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 12px; cursor: pointer; position: relative; }
+  .simcard img { width: 100%; height: 110px; object-fit: contain; background: var(--surface); border-radius: 6px; margin-bottom: 6px; }
+  .simcard .score { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+  .simcard:hover { border-color: var(--accent); }
+  .simcard .n { font-weight: 600; line-height: 1.3; }
+  .simcard .m { color: var(--text-muted); margin-top: 3px; }
+  .simcard .p { color: var(--accent); font-weight: 700; margin-top: 4px; }
+  .product .loading, .product .empty-note { padding: 24px 20px; color: var(--text-muted); font-size: 13px; }
+  @media (max-width: 560px) { .product .hero { flex-direction: column; } .product .hero img { width: 100%; height: 160px; } }
 </style>
 </head>
 <body>
@@ -324,6 +377,9 @@
     <option value="price_desc">Price: high to low</option>
     <option value="name_asc">Name: A-Z</option>
   </select>
+</div>
+<div class="modal product" id="productModal" role="dialog" aria-modal="true" aria-labelledby="productTitle" tabindex="-1" hidden>
+  <div id="productBody"></div>
 </div>
 <main>
   <div class="status" id="status"></div>
@@ -415,7 +471,7 @@ function cardHTML(p) {
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join('');
   return `
-    <a class="card" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">
+    <a class="card" href="#p=${p.id}" data-id="${p.id}">
       <div class="card-body">
         ${restockBadge(p)}
         <div class="card-name">${escapeHtml(p.name)}</div>
@@ -480,6 +536,7 @@ let openModal = null;
 
 function closeModal() {
   if (!openModal) return;
+  if (openModal.modal === 'productModal') history.replaceState(null, '', location.pathname + location.search);
   el(openModal.modal).hidden = true;
   el('backdrop').hidden = true;
   const btn = el(openModal.button);
@@ -582,6 +639,145 @@ runSearch(1, false);
   ping(true);
   setInterval(() => { if (!document.hidden) ping(false); }, 10000);
 })();
+
+/* ---- Product popup: same product elsewhere + similar products ---- */
+
+const money = v => '$' + Number(v).toFixed(2);
+const exclKey = (g) => `excl:${g.group_id}:${g.size_key}`;
+const loadExcluded = g => { try { return new Set(JSON.parse(localStorage.getItem(exclKey(g)) || '[]')); } catch { return new Set(); } };
+const saveExcluded = (g, set) => { try { localStorage.setItem(exclKey(g), JSON.stringify([...set])); } catch {} };
+
+let productData = null;      // the /detail payload currently shown
+let productExcluded = new Set();
+let showAllOffers = false;
+
+async function openProduct(id, push = true) {
+  const body = el('productBody');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  if (openModal?.modal !== 'productModal') showModal('productModal', 'filterBtn');
+  if (push) history.replaceState(null, '', `#p=${id}`);
+  const res = await fetch(`/api/products/${id}/detail`);
+  if (!res.ok) { body.innerHTML = '<div class="empty-note">Product not found.</div>'; return; }
+  productData = await res.json();
+  productExcluded = productData.group ? loadExcluded(productData.group) : new Set();
+  showAllOffers = false;
+  renderProduct();
+  el('productModal').scrollTop = 0;
+}
+
+/* Every offer in a group is the same size by construction; for dosed products
+   show the dose itself rather than each store's label for it (".1g",
+   "100milligrams" and "100mg" are all the same gummy). */
+function sizeText(g, o) {
+  return g.size_key.endsWith('mgTHC') ? g.size_key.replace('mgTHC', 'mg') : (o.size_label || '');
+}
+
+function median(xs) {
+  const a = [...xs].sort((x, y) => x - y), n = a.length;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+
+function renderProduct() {
+  const d = productData, p = d.product, g = d.group;
+  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.weight_label, p.thc_display].filter(Boolean).join(' · ');
+  let html = `
+    <div class="hero">
+      ${p.image_url ? `<img src="${escapeAttr(p.image_url)}" alt="">` : ''}
+      <div class="info">
+        <div class="sub">${escapeHtml(p.brand_name || '')}</div>
+        <div class="name" id="productTitle">${escapeHtml(p.name)}</div>
+        <div class="sub">${escapeHtml(tags)}</div>
+        <div class="big">${money(p.price)} <span class="sub">at ${escapeHtml(p.dispensary_display)}</span></div>
+        <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View at ${escapeHtml(p.dispensary_display)} →</a>
+      </div>
+      <button class="close" data-close-product aria-label="Close">&times;</button>
+    </div>`;
+
+  if (!g) {
+    html += `<section><h3>Same product elsewhere</h3><div class="sub">No other dispensary was matched to this product${d.sizes.length ? '' : ' (similarity data not built for this database yet)'}.</div></section>`;
+  } else {
+    const offers = d.offers;
+    const active = offers.filter(o => !productExcluded.has(o.id));
+    const prices = active.map(o => o.price);
+    const mine = offers.find(o => o.is_this);
+    const stats = prices.length ? { min: Math.min(...prices), max: Math.max(...prices), avg: prices.reduce((a, b) => a + b, 0) / prices.length, med: median(prices) } : null;
+    let verdict = '';
+    if (stats && mine && !productExcluded.has(mine.id) && active.length > 1) {
+      const delta = mine.price - stats.avg;
+      const rank = active.filter(o => o.price < mine.price).length + 1;
+      const cls = delta <= 0 ? 'good' : 'bad';
+      verdict = `<div class="verdict ${cls}">${money(Math.abs(delta))} ${delta <= 0 ? 'under' : 'over'} the average of ${active.length} dispensaries — #${rank} cheapest</div>`;
+    } else if (active.length <= 1) {
+      verdict = `<div class="verdict">Only ${active.length ? 'this dispensary is' : 'no dispensaries are'} being compared — tick some offers below.</div>`;
+    }
+    const pos = v => stats.max === stats.min ? 50 : (v - stats.min) / (stats.max - stats.min) * 100;
+    const bar = stats && active.length > 1 ? `
+      <div class="pricebar"><i style="left:${pos(stats.avg)}%" title="average"></i>${mine && !productExcluded.has(mine.id) ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
+      <div class="pricebar-ends"><span>${money(stats.min)}</span><span>${money(stats.max)}</span></div>
+      <div class="stats"><span>average <b>${money(stats.avg)}</b></span><span>median <b>${money(stats.med)}</b></span><span>cheapest <b>${money(stats.min)}</b></span><span>stores <b>${active.length}</b></span></div>` : '';
+    const limit = showAllOffers || offers.length <= 10 ? offers.length : 8;
+    // Always show the dispensary being viewed, even when it sits below the cut.
+    const shown = offers.slice(0, limit);
+    const mineIdx = offers.findIndex(o => o.is_this);
+    if (mineIdx >= limit) shown.push({ gap: true, skipped: mineIdx - limit }, offers[mineIdx]);
+    const rankOf = new Map(offers.map((o, k) => [o.id, k + 1]));
+    const rows = shown.map(o => o.gap ? `<tr class="gap"><td colspan="7">… ${o.skipped} more ${o.skipped === 1 ? 'dispensary' : 'dispensaries'} …</td></tr>` : `
+      <tr class="${o.is_this ? 'me' : ''} ${productExcluded.has(o.id) ? 'off' : ''}">
+        <td class="chk"><input type="checkbox" data-offer="${o.id}" ${productExcluded.has(o.id) ? '' : 'checked'} aria-label="include in comparison"></td>
+        <td class="rank">${rankOf.get(o.id)}</td>
+        <td>${escapeHtml(o.dispensary_display)}${o.confidence < 0.9 ? '<span class="lowconf" title="matched by name similarity, not an exact key">likely the same</span>' : ''}</td>
+        <td class="listed" title="${escapeAttr(o.name)}">${escapeHtml(o.name)}</td>
+        <td class="size">${escapeHtml(sizeText(g, o))}</td>
+        <td class="num">${money(o.price)}${o.sale_price ? ` <span class="sub">sale ${money(o.sale_price)}</span>` : ''}</td>
+        <td class="num"><a href="${escapeAttr(o.product_url)}" target="_blank" rel="noopener">view</a></td>
+      </tr>`).join('');
+    html += `<section><h3>Same product at other dispensaries · ${escapeHtml(g.size_label || '')}</h3>${verdict}${bar}
+      <table class="offers"><thead><tr><th></th><th class="num">#</th><th>Dispensary</th><th>Listed as</th><th>Size</th><th class="num">Price</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      ${offers.length > limit ? `<button class="showall" data-showall>Show all ${offers.length} dispensaries</button>` : ''}
+      <div class="sub" style="margin-top:8px">Untick a row to leave it out of the average. Your choices are remembered on this device.</div></section>`;
+  }
+
+  if (d.similar.length) {
+    html += `<section><h3>Similar products</h3><div class="similar">${d.similar.map(s => `
+      <div class="simcard" data-id="${s.id}" role="button" tabindex="0">
+        ${s.image_url ? `<img src="${escapeAttr(s.image_url)}" alt="" loading="lazy">` : ''}
+        <span class="score" title="similarity">${s.score.toFixed(2)}</span>
+        <div class="n">${escapeHtml(s.brand_name ? s.brand_name + ' — ' : '')}${escapeHtml(s.name)}</div>
+        <div class="m">${escapeHtml([s.product_type, s.weight_label, s.thc_display].filter(Boolean).join(' · '))}</div>
+        <div class="p">${money(s.price)} <span class="m">${escapeHtml(s.dispensary_display)}</span></div>
+      </div>`).join('')}</div></section>`;
+  }
+  el('productBody').innerHTML = html;
+}
+
+el('productBody').addEventListener('change', e => {
+  const id = Number(e.target.dataset.offer);
+  if (!id || !productData?.group) return;
+  e.target.checked ? productExcluded.delete(id) : productExcluded.add(id);
+  saveExcluded(productData.group, productExcluded);
+  renderProduct();
+});
+el('productBody').addEventListener('click', e => {
+  if (e.target.closest('[data-close-product]')) { closeModal(); return; }
+  if (e.target.closest('[data-showall]')) { showAllOffers = true; renderProduct(); return; }
+  const card = e.target.closest('.simcard');
+  if (card) openProduct(Number(card.dataset.id));
+});
+el('productBody').addEventListener('keydown', e => {
+  const card = e.target.closest?.('.simcard');
+  if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProduct(Number(card.dataset.id)); }
+});
+el('grid').addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  e.preventDefault();
+  openProduct(Number(card.dataset.id));
+});
+{
+  const m = location.hash.match(/^#p=(\d+)$/);
+  if (m) openProduct(Number(m[1]), false);
+}
+
 </script>
 </body>
 </html>

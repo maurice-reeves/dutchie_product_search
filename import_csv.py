@@ -6,17 +6,33 @@ Usage:
 With no argument, auto-discovers the most recently modified
 all_dispensaries*.csv in the parent "Personal Projects" directory (where the
 dutchie_scraper notebook writes its output).
+
+After the database is written, the product popup's tables (same product at
+other stores, similar products) are rebuilt by running build_similarity.py
+under an interpreter that has its ML stack -- see refresh_similarity().
+
+Environment:
+    PRODUCTS_DB         database to write (default data/products.db; the
+                        same override app.py honours)
+    SIMILARITY_PYTHON   interpreter for build_similarity.py; set it to an
+                        empty string to skip the similarity refresh
 """
 import ast
+import os
 import re
+import shutil
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DB_PATH = PROJECT_ROOT / "data" / "products.db"
+DB_PATH = Path(os.environ.get("PRODUCTS_DB") or PROJECT_ROOT / "data" / "products.db")
+
+# Written by build_similarity.py; read by the product popup (app.py).
+SIMILARITY_TABLES = ("product_prices", "product_groups", "group_prices", "similar_products")
 
 # Only pull the columns the search app actually displays/filters on — the
 # source CSV has ~170 columns (POS-integration-specific fields that vary per
@@ -177,6 +193,14 @@ def ensure_snapshot_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+RESTOCK_COLUMNS = [
+    "product_id", "name", "brand_name", "price", "product_type", "image_url",
+    "dispensary_display", "dispensary_slug", "dispensary_url",
+    "created_at", "scrape_date", "prev_scrape_date", "reason",
+    "prev_quantity", "quantity", "prev_package_id", "package_id",
+]
+
+
 def compute_restocks(conn: sqlite3.Connection, today: str, snap: pd.DataFrame) -> pd.DataFrame:
     """Classify what landed on shelves today, versus the previous snapshot.
 
@@ -197,7 +221,10 @@ def compute_restocks(conn: sqlite3.Connection, today: str, snap: pd.DataFrame) -
     prev_date = row[0] if row else None
     if not prev_date:
         print("No earlier snapshot to compare against — skipping restock detection.")
-        return pd.DataFrame()
+        # Same columns as a real result: a column-less frame makes to_sql emit
+        # "CREATE TABLE restock_events ()", which SQLite rejects, so a first
+        # import into a fresh database used to crash here.
+        return pd.DataFrame(columns=RESTOCK_COLUMNS)
 
     prev = pd.read_sql(
         "SELECT product_id, dispensary_slug, quantity, package_id "
@@ -240,12 +267,59 @@ def compute_restocks(conn: sqlite3.Connection, today: str, snap: pd.DataFrame) -
     events = merged[merged["reason"].notna()].copy()
     events["scrape_date"] = today
     events["prev_scrape_date"] = prev_date
-    return events[[
-        "product_id", "name", "brand_name", "price", "product_type", "image_url",
-        "dispensary_display", "dispensary_slug", "dispensary_url",
-        "created_at", "scrape_date", "prev_scrape_date", "reason",
-        "prev_quantity", "quantity", "prev_package_id", "package_id",
-    ]]
+    return events[RESTOCK_COLUMNS]
+
+
+def drop_similarity_tables(conn: sqlite3.Connection) -> None:
+    """The popup's tables reference products by row id, and replacing the
+    products table reassigns every id. Drop them so the popup degrades to
+    "product only" (app.py checks for product_groups) rather than showing
+    another row's offers until refresh_similarity() rebuilds them."""
+    for table in SIMILARITY_TABLES:
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def similarity_python() -> "str | None":
+    """An interpreter that can import build_similarity.py's ML stack.
+
+    The venv deliberately doesn't carry sentence-transformers/faiss/torch
+    (~1 GB); on this machine they live in the default python.org install.
+    SIMILARITY_PYTHON names one explicitly; an empty value means "skip".
+    The two imports are probed separately because torch and faiss cannot
+    share a process on macOS (see build_similarity.py).
+    """
+    explicit = os.environ.get("SIMILARITY_PYTHON")
+    if explicit is not None:
+        return explicit or None
+    for candidate in (sys.executable, shutil.which("python3"), "/usr/local/bin/python3"):
+        if not candidate or not Path(candidate).exists():
+            continue
+        if all(subprocess.run([candidate, "-c", f"import {module}"], capture_output=True).returncode == 0
+               for module in ("faiss", "sentence_transformers")):
+            return candidate
+    return None
+
+
+def refresh_similarity(csv_path: Path) -> bool:
+    """Rebuild the popup's tables for the database just written (~10 min).
+
+    Never fails the import: the products are already on disk, and without
+    these tables the popup simply shows the product alone. Returns whether
+    the tables were rebuilt.
+    """
+    python = similarity_python()
+    if python is None:
+        print("Similarity tables not refreshed: no interpreter with faiss + sentence-transformers "
+              "(set SIMILARITY_PYTHON; SIMILARITY_PYTHON= skips this quietly)")
+        return False
+    cmd = [python, str(PROJECT_ROOT / "build_similarity.py"), "all",
+           "--db", str(DB_PATH), "--dutchie-csv", str(csv_path)]
+    print(f"Refreshing similarity tables: {' '.join(cmd)}", flush=True)
+    result = subprocess.run(cmd)     # its progress goes to our stdout, i.e. the job log
+    if result.returncode != 0:
+        print(f"Similarity refresh failed (exit {result.returncode}); "
+              "the popup shows products alone until the next successful run")
+    return result.returncode == 0
 
 
 def build_database(csv_path: Path) -> None:
@@ -332,6 +406,7 @@ def build_database(csv_path: Path) -> None:
     conn = sqlite3.connect(DB_PATH)
     try:
         out.to_sql("products", conn, if_exists="replace", index=True, index_label="id")
+        drop_similarity_tables(conn)
 
         conn.execute("DROP TABLE IF EXISTS products_fts")
         conn.execute("""
@@ -408,3 +483,4 @@ if __name__ == "__main__":
     if not path.exists():
         sys.exit(f"CSV not found: {path}")
     build_database(path)
+    refresh_similarity(path)

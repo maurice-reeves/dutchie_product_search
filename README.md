@@ -96,7 +96,9 @@ daily import.
 Requires Python 3.9+ and (for the public-tunnel feature) `cloudflared`.
 
 > The database is refreshed automatically after each scheduled scrape —
-> `dutchie_scraper` runs `import_csv.py` itself once its CSV is written. The
+> `dutchie_scraper` runs `import_csv.py` itself once its CSV is written, and
+> `import_csv.py` then rebuilds the product popup's tables (see
+> [Keeping the popup's tables fresh](#keeping-the-popups-tables-fresh)). The
 > manual steps below are for a first build or an ad-hoc refresh.
 
 ```bash
@@ -122,8 +124,12 @@ output), or takes an explicit path:
 ./.venv/bin/python import_csv.py /path/to/all_dispensaries_2026-08-27.csv
 ```
 
-It prints the row counts at each stage and the final DB path. Re-run this
-any time you have a fresh scrape.
+It prints the row counts at each stage and the final DB path, then runs
+`build_similarity.py` for the popup (about ten more minutes; skip it with
+`SIMILARITY_PYTHON=`). Re-run this any time you have a fresh scrape.
+`PRODUCTS_DB=path` writes somewhere other than `data/products.db` — the
+same override `app.py` accepts, so a scratch database can be built and
+served without touching the live one.
 
 ### 2. Start the server
 
@@ -298,6 +304,25 @@ It runs under the **default** Python (which has `sentence-transformers`,
 `faiss-cpu`, `torch`), not the venv. `embed` and `index` are separate
 processes on purpose: `torch` and `faiss` each ship an OpenMP runtime and
 importing both in one process segfaults on macOS.
+
+### Keeping the popup's tables fresh
+
+The four tables reference products by **row id**, and every import replaces
+the `products` table and reassigns the ids. So `import_csv.py`:
+
+1. drops the four tables right after writing `products` — the popup then
+   shows the product alone (it checks for `product_groups`) instead of
+   another row's offers;
+2. runs `build_similarity.py all` for the new database once the import is
+   done, under the first interpreter it finds that can import both `faiss`
+   and `sentence_transformers` (the venv, `python3` on `PATH`, then
+   `/usr/local/bin/python3`). `SIMILARITY_PYTHON=/path/to/python` names one
+   explicitly; `SIMILARITY_PYTHON=` (empty) skips the rebuild.
+
+A failed or skipped rebuild never fails the import — the products are
+already on disk — it just leaves the popup in "product only" mode until the
+next successful run. Its output goes to the same log as the import, i.e. the
+scraper job's log when it runs on the schedule.
 
 | table | what |
 | --- | --- |

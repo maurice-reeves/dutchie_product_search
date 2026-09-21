@@ -339,15 +339,22 @@ Networks → Tunnels) and remove the two CNAMEs.
 
 ## Product popup: same product elsewhere, similar products
 
-Clicking a card opens a popup with the product and **one price list**:
-every other dispensary selling the same product at the same size (each
-store's lowest price) together with the nearest **similar products**, sorted
-by price. Ticked rows make up the range, average, median and the "#n
-cheapest" verdict; same-product offers start ticked, similar products start
-unticked, and a similar product is priced at the size being compared when
-it is sold in that size (otherwise its size cell is flagged `≠`). The data
-behind it is built offline by `build_similarity.py`, so the site itself only
-reads four extra tables:
+Clicking a card opens a modal: a compact header (image, brand, full name,
+one attributes line), the listing's own price — the sale price when the
+menu shows one, regular price struck through beneath — a "View dispensary"
+button, then **one price comparison**: a horizontal graph and a checkable
+list of the same product at other dispensaries (ticked by default) and the
+nearest similar products (unticked), all at the size being compared. Each
+row shows its *applicable* price — an unconditional sale price if the menu
+has one, else the regular price — and that same number is what the graph
+and the Min / Average / Max summary use, so the two can never disagree.
+Ticking or unticking a row recomputes everything; the row order never
+changes. The graph marks every selected price, the average (dashed) and
+this listing (emerald triangle, shown even when unticked, extending the
+scale if it sits outside the selected range). A similar product not sold
+in the compared size shows "Price unavailable" and cannot be ticked. The
+data behind it is built offline by `build_similarity.py`, so the site
+itself only reads four extra tables:
 
 ```bash
 /usr/local/bin/python3 build_similarity.py all --db data/products.db      # ~20 min: embed, index, groups
@@ -415,14 +422,12 @@ sample of cross-store pairs). In order:
    never two different stated strains, formats (cartridge vs AIO vs kit) or
    pack counts. Checking at the group level is what stops A↔B↔C chains.
 
-Matching is deliberately not the last word: every row in the popup has a
-checkbox, ticking or unticking one recomputes the range/average/median and
-the ranking live, and the choices are remembered per product in
-`localStorage` (key `cmp:<group>:<size>`: same-product rows unticked,
-similar rows ticked). Low-confidence offers are labelled "likely the same";
-similar rows carry a `similar · 92%` tag and a row's name opens that
-product's own popup. On phones the listing name folds under the store name
-so the price column stays on screen.
+Matching is deliberately not the last word: every row has a checkbox,
+the choices are remembered per product in `localStorage` (key
+`cmp:<group>:<size>`: same-product rows unticked, similar rows ticked), and
+low-confidence offers are labelled. The modal traps keyboard focus, closes
+on Escape and returns focus to the card that opened it; the summary is an
+`aria-live` region and the graph carries a text description of its values.
 
 ## Status dashboard (`/dash`)
 

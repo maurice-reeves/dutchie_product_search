@@ -841,13 +841,18 @@ function renderProduct() {
       <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>
     </div>
     <hr class="divider">
-    <h3>Compare prices</h3>
+    <h3>Compare prices</h3>`;
+  // Nothing to compare against: say so, rather than graphing one price.
+  const alone = productRows.every(r => r.is_this);
+  html += alone
+    ? `<div class="empty-note">No other store lists this product${d.group ? '' : ' yet'}.</div>`
+    : `
     <div aria-live="polite"><div class="caption" id="cmpCaption"></div></div>
     <div class="graph" id="cmpGraph" role="img"></div>
     <div class="sr-only" id="cmpSummary" aria-live="polite"></div>
     <ul class="rows" id="cmpRows">${productRows.map(rowHTML).join('')}</ul>`;
   el('productBody').innerHTML = html;
-  renderGraph(productRows, mine);
+  if (!alone) renderGraph(productRows, mine);
 }
 
 /* For dosed products the compared size is the dose, whatever label each

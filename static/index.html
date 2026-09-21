@@ -13,17 +13,19 @@
     --text-muted: #6b7280;
     --accent: #16805a;
     --accent-text: #ffffff;
+    --sale: #0f8a5f;
     --shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14161a;
-      --surface: #1e2126;
-      --border: #2c2f36;
-      --text: #f1f2f4;
-      --text-muted: #9aa0a8;
-      --accent: #2fbf83;
+      --bg: #121516;
+      --surface: #202325;
+      --border: #3a3f42;
+      --text: #f2f4f4;
+      --text-muted: #b8bfc3;
+      --accent: #34c997;
       --accent-text: #0b0c0d;
+      --sale: #73dcb6;
       --shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
   }
@@ -279,67 +281,63 @@
   .card-change { font-size: 12px; color: var(--text-muted); }
 
   /* ---- Product popup ---- */
-  .modal.product { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; }
-  .product .hero { display: flex; gap: 18px; padding: 20px 20px 16px; border-bottom: 1px solid var(--border); position: relative; }
-  .product .hero img { width: 120px; height: 120px; object-fit: contain; border-radius: 8px; background: var(--bg); flex: none; }
-  .product .hero .info { min-width: 0; flex: 1; padding-right: 24px; }
-  .product .hero .name { font-size: 17px; font-weight: 700; line-height: 1.3; margin: 2px 0 4px; }
-  .product .sub { font-size: 12px; color: var(--text-muted); }
-  .product .hero .big { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 8px; }
-  .product .hero .close { position: absolute; top: 12px; right: 14px; }
-  .product .visit {
-    display: inline-block; margin-top: 10px; padding: 7px 14px; border-radius: 8px;
-    background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600; text-decoration: none;
-  }
-  .product section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  .product section:last-child { border-bottom: 0; }
-  .product h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
-  .product .verdict { font-size: 15px; font-weight: 600; margin: 4px 0 10px; }
-  .product .verdict.good { color: var(--accent); }
-  .product .verdict.bad { color: #c2410c; }
-  .product .stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
-  .product .stats b { color: var(--text); font-weight: 600; }
-  .pricebar { position: relative; height: 8px; border-radius: 4px; background: var(--border); margin: 12px 0 4px; }
-  .pricebar i { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: var(--text-muted); }
-  .pricebar i.me { background: var(--accent); width: 6px; top: -5px; height: 18px; }
-  .pricebar-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
-  .offers { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-  .offers th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .offers th.num { text-align: right; }
-  .offers td { padding: 6px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
-  .offers td.rank { color: var(--text-muted); width: 28px; text-align: right; }
-  .offers td.listed { color: var(--text-muted); font-size: 12px; max-width: 300px; }
-  .offers td.listed .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
-  .offers td.size { white-space: nowrap; color: var(--text-muted); }
-  .offers tr.me td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
-  .offers tr.off td { color: var(--text-muted); }
-  .offers tr.off td.listed, .offers tr.off td.num, .offers tr.off td.size { opacity: .6; }
-  .offers td.chk { width: 22px; }
-  .offers td.num { text-align: right; white-space: nowrap; }
-  .offers a { color: inherit; }
-  .offers .lowconf { font-size: 10px; color: #c2410c; margin-left: 6px; }
-  .offers .tag { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); margin-left: 6px; white-space: nowrap; }
-  .offers td.listed a.open { color: inherit; text-decoration: none; }
-  .offers td.listed a.open:hover { color: var(--accent); text-decoration: underline; }
-  .offers td.size.other { color: #c2410c; }
-  .offers tr.gap td { text-align: center; color: var(--text-muted); font-size: 11px; padding: 2px; }
-  .offers td.store .alt { display: none; }
-  @media (max-width: 640px) {
-    /* Keep the price on screen: the listing name moves under the store name. */
-    .offers th.listed, .offers td.listed, .offers th.rank, .offers td.rank { display: none; }
-    .offers td.store .alt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 2px; max-width: 50vw; line-height: 1.3; word-break: break-word; }
-    .offers td.store .alt a { color: inherit; text-decoration: none; }
-    .offers td.store { max-width: 50vw; }
-    .offers th.view, .offers td.view { display: none; }     /* the name opens the product; the hero button reaches the store */
-    .offers td.num { white-space: normal; }                  /* "sale $x" may wrap under the price */
-    .offers td.num .sub { display: block; }
-    .offers td { padding: 6px 3px; }
-    .offers td.chk { width: 18px; }
-  }
-  .showall { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 6px 0; }
-  .simcard .p { color: var(--accent); font-weight: 700; margin-top: 4px; }
-  .product .loading, .product .empty-note { padding: 24px 20px; color: var(--text-muted); font-size: 13px; }
-  @media (max-width: 560px) { .product .hero { flex-direction: column; } .product .hero img { width: 100%; height: 160px; } }
+  /* ---- Product modal: compact header, one price graph, one checkable list ---- */
+  .modal.product { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border-radius: 12px; }
+  .modal.product:focus { outline: none; }   /* the panel takes focus programmatically; the ring belongs on its controls */
+  .product .body { padding: 20px; position: relative; }
+  .product .close { position: absolute; top: 12px; right: 12px; }
+  .product .pimg { display: block; width: 120px; height: 120px; object-fit: contain; margin: 4px auto 14px; border-radius: 8px; background: #f4f4f2; }
+  .product .brand { font-size: 13px; color: var(--text-muted); }
+  .product .pname { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 2px 0 6px; overflow-wrap: anywhere; }
+  .product .attrs { font-size: 13px; color: var(--text-muted); }
+  .product .current { margin-top: 18px; }
+  .product .cprice { font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .product .cprice.sale { color: var(--sale); }
+  .product .cwas { font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .product .cwas s { margin-right: 6px; }
+  .product .cstore { font-size: 15px; margin-top: 6px; }
+  .product .cstore .sub { display: block; font-size: 13px; color: var(--text-muted); }
+  .product .visit { display: block; text-align: center; margin-top: 14px; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 15px; font-weight: 600; text-decoration: none; }
+  .product .divider { border: 0; border-top: 1px solid var(--border); margin: 22px 0 18px; }
+  .product h3 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+  .product .caption { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+  .product .empty-note, .product .loading { padding: 24px 20px; color: var(--text-muted); text-align: center; }
+  /* The graph: a thin track with the selected range emphasised, a dot per
+     selected price, a dashed line for the average and a triangle for this
+     listing. Everything is positioned by value on one linear scale. */
+  .graph { position: relative; height: 130px; margin: 6px 0 4px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .graph .lbl { position: absolute; white-space: nowrap; transform: translateX(-50%); }
+  .graph .lbl.l, .graph .lbl.r { transform: none; }
+  .graph .this-lbl { top: 0; color: var(--accent); font-weight: 600; }
+  .graph .avg-lbl { top: 22px; }
+  .graph .track { position: absolute; left: 0; right: 0; top: 68px; height: 4px; border-radius: 2px; background: var(--border); }
+  .graph .range { position: absolute; top: 68px; height: 4px; background: var(--text-muted); opacity: .7; }
+  .graph .dot { position: absolute; top: 65px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); transform: translateX(-50%); }
+  .graph .avg { position: absolute; top: 44px; height: 50px; border-left: 2px dashed var(--text-muted); transform: translateX(-1px); }
+  .graph .this { position: absolute; top: 46px; height: 46px; border-left: 2px solid var(--accent); transform: translateX(-1px); }
+  .graph .this::before { content: ""; position: absolute; top: -8px; left: -6px; border: 5px solid transparent; border-top: 8px solid var(--accent); border-bottom: 0; }
+  .graph .end { top: 84px; }
+  .graph .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .summary { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); padding: 6px 0 4px; border-bottom: 1px solid var(--border); }
+  .summary b { display: block; font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .summary div:nth-child(2) { text-align: center; }
+  .summary div:last-child { text-align: right; }
+  /* The list: checkbox | store + description | price */
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .rows li { border-bottom: 1px solid var(--border); }
+  .rows label { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; cursor: pointer; }
+  .rows input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+  .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rows .store { font-size: 15px; font-weight: 600; }
+  .rows .desc { display: block; font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .rows .sim { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 6px; white-space: nowrap; }
+  .rows .price { text-align: right; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rows .price.sale { color: var(--sale); }
+  .rows .price small { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+  .rows .price.na { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+  .rows li.off .store, .rows li.off .price, .rows li.off .price.sale { color: var(--text-muted); }
+  .rows li.me .store::after { content: "this listing"; font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 6px; }
+  @media (max-width: 400px) { .product .body { padding: 16px; } .product .pname { font-size: 21px; } }
 </style>
 </head>
 <body>
@@ -398,7 +396,7 @@
   </select>
 </div>
 <div class="modal product" id="productModal" role="dialog" aria-modal="true" aria-labelledby="productTitle" tabindex="-1" hidden>
-  <div id="productBody"></div>
+  <div id="productBody" class="body"></div>
 </div>
 <main>
   <div class="status" id="status"></div>
@@ -563,9 +561,8 @@ function closeModal() {
   if (openModal.modal === 'productModal') history.replaceState(null, '', location.pathname + location.search);
   el(openModal.modal).hidden = true;
   el('backdrop').hidden = true;
-  const btn = el(openModal.button);
-  btn.setAttribute('aria-expanded', 'false');
-  btn.focus();
+  const btn = typeof openModal.button === 'string' ? el(openModal.button) : openModal.button;
+  if (btn) { if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
   openModal = null;
 }
 
@@ -574,7 +571,8 @@ function showModal(modal, button) {
   openModal = { modal, button };
   el('backdrop').hidden = false;
   el(modal).hidden = false;
-  el(button).setAttribute('aria-expanded', 'true');
+  const btn = typeof button === 'string' ? el(button) : button;
+  if (btn?.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'true');
   // Focus the panel itself, not the first control: focusing a <select> pops
   // its native menu open the moment the panel appears. The panel is
   // tabindex="-1" so it can take focus without entering the tab order, which
@@ -664,173 +662,188 @@ runSearch(1, false);
   setInterval(() => { if (!document.hidden) ping(false); }, 10000);
 })();
 
-/* ---- Product popup: one price list -- same product elsewhere + similar products ---- */
+/* ---- Product modal: compact details, one price graph, one checkable list ---- */
 
-const money = v => '$' + Number(v).toFixed(2);
-/* What the shopper ticked or unticked, per product being compared: same-product
-   offers start ticked (`off` lists the exceptions), similar products start
-   unticked (`on` lists the exceptions). Older pages stored only the first
-   under an "excl:" key; it is read once so nobody loses their choices. */
+const cents = v => (v == null || v === '' || isNaN(Number(v))) ? null : Math.round(Number(v) * 100);
+const money = c => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/* Ticks are remembered per product being compared: same-product rows start
+   ticked (`off` lists the exceptions), similar products start unticked
+   (`on` lists the exceptions). Keyed by product row id, not position. */
 const cmpKey = d => d.group ? `cmp:${d.group.group_id}:${d.group.size_key}` : `cmp:p:${d.product.id}`;
 function loadChoices(d) {
   try {
     const raw = localStorage.getItem(cmpKey(d));
     if (raw) { const o = JSON.parse(raw); return { off: new Set(o.off || []), on: new Set(o.on || []) }; }
-    const legacy = d.group && localStorage.getItem(`excl:${d.group.group_id}:${d.group.size_key}`);
-    return { off: new Set(legacy ? JSON.parse(legacy) : []), on: new Set() };
-  } catch { return { off: new Set(), on: new Set() }; }
+  } catch {}
+  return { off: new Set(), on: new Set() };
 }
 const saveChoices = (d, c) => { try { localStorage.setItem(cmpKey(d), JSON.stringify({ off: [...c.off], on: [...c.on] })); } catch {} };
 
 let productData = null;      // the /detail payload currently shown
 let productChoices = { off: new Set(), on: new Set() };
-let showAllOffers = false;
+let productRows = [];        // the comparison list, in a fixed order for the life of the modal
+let productOpener = null;    // the element to return focus to
 
-async function openProduct(id, push = true) {
+async function openProduct(id, opener = null, push = true) {
   const body = el('productBody');
   body.innerHTML = '<div class="loading">Loading…</div>';
-  if (openModal?.modal !== 'productModal') showModal('productModal', 'filterBtn');
+  productOpener = opener;
+  if (openModal?.modal !== 'productModal') showModal('productModal', opener);
   if (push) history.replaceState(null, '', `#p=${id}`);
   const res = await fetch(`/api/products/${id}/detail`);
   if (!res.ok) { body.innerHTML = '<div class="empty-note">Product not found.</div>'; return; }
   productData = await res.json();
   productChoices = loadChoices(productData);
-  showAllOffers = false;
+  productRows = buildRows(productData);
   renderProduct();
   el('productModal').scrollTop = 0;
 }
 
-/* Every offer in a group is the same size by construction; for dosed products
-   show the dose itself rather than each store's label for it (".1g",
-   "100milligrams" and "100mg" are all the same gummy). */
-function sizeText(g, label) {
-  return g && g.size_key.endsWith('mgTHC') ? g.size_key.replace('mgTHC', 'mg') : (label || '');
+/* The one price a listing is compared at: an unconditional sale price when
+   the menu shows one, else the regular price, always at the size being
+   compared. Similar products not sold in that size have no comparable
+   price and cannot be ticked. Cents throughout; rounding happens only when
+   a number is displayed. */
+function applicablePrice(regular, sale) {
+  const reg = cents(regular), s = cents(sale);
+  if (reg == null) return null;
+  return s != null && s < reg ? { cents: s, regular: reg, sale: true } : { cents: reg, regular: reg, sale: false };
 }
 
-function median(xs) {
-  const a = [...xs].sort((x, y) => x - y), n = a.length;
-  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
-}
-
-/* The rows of the price list: same-product offers (ticked unless the shopper
-   unticked them) and similar products (unticked unless ticked), one shape.
-   A similar product is priced at the size being compared when it is sold in
-   that size; otherwise at its listed size, and the size cell says so. */
-function priceRows(d) {
-  const g = d.group, p = d.product;
-  const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, brand_name: p.brand_name, image_url: p.image_url,
-    dispensary_display: p.dispensary_display, product_url: p.product_url || p.dispensary_url, price: p.price, sale_price: null, size_label: p.weight_label, confidence: 1 }];
-  const rows = same.map(o => ({ ...o, kind: 'same', size: sizeText(g, o.size_label), otherSize: false,
-    checked: !productChoices.off.has(o.id) }));
+function buildRows(d) {
+  const p = d.product, g = d.group;
+  const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, dispensary_display: p.dispensary_display,
+    price: p.price, sale_price: null, confidence: 1 }];
+  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.name,
+    price: applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {
-    const atSize = s.price_at_size != null;
-    rows.push({ ...s, kind: 'similar', is_this: false, price: atSize ? s.price_at_size : s.price, sale_price: atSize ? s.sale_at_size : null,
-      size: atSize ? sizeText(g, s.size_label_at_size) : (s.weight_label || ''), otherSize: !!g && !atSize, checked: productChoices.on.has(s.id) });
+    if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
+    const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
+    rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
+      desc: (s.brand_name && !s.name.toLowerCase().startsWith(s.brand_name.toLowerCase().split(' ')[0]) ? s.brand_name + ' — ' : '') + s.name,
+      price, checked: price != null && productChoices.on.has(s.id) });
   }
-  return rows.sort((a, b) => a.price - b.price);
+  // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
+  return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));
+}
+
+function selectedStats(rows) {
+  const xs = rows.filter(r => r.checked && r.price).map(r => r.price.cents);
+  if (!xs.length) return null;
+  return { n: xs.length, min: Math.min(...xs), max: Math.max(...xs), avg: xs.reduce((a, b) => a + b, 0) / xs.length,
+           sales: rows.some(r => r.checked && r.price?.sale), prices: xs };
+}
+
+function attributes(p, g) {
+  const sub = (p.product_subcategory || '').replace(/-/g, ' ');
+  const thc = /^0(\.0+)?\s*(%|mg)/.test(p.thc_display || '') ? '' : p.thc_display;   // a bare 0 is missing data, not zero potency
+  const size = g ? sizeText(g) : p.weight_label;                                     // the dose for dosed products, not ".1g"
+  return [p.product_type, sub && sub[0].toUpperCase() + sub.slice(1), p.strain_type, size, thc].filter(Boolean).join(' · ');
+}
+
+/* Everything derived from the ticks is drawn by this one function, so the
+   caption, the graph and the summary cannot disagree. */
+function renderGraph(rows, mine) {
+  const stats = selectedStats(rows);
+  const ref = mine?.price ? mine.price.cents : null;                         // this listing's marker, ticked or not
+  const cap = el('cmpCaption'), graph = el('cmpGraph'), sum = el('cmpSummary');
+  if (!stats) {
+    cap.textContent = 'No prices selected';
+    graph.innerHTML = '<div class="empty">Select a listing to compare prices.</div>';
+    graph.setAttribute('aria-label', 'No prices selected.');
+    sum.innerHTML = ['Min', 'Average', 'Max'].map(k => `<div>${k}<b>—</b></div>`).join('');
+    return;
+  }
+  cap.textContent = `Average of ${stats.n} selected price${stats.n === 1 ? '' : 's'} · ${stats.sales ? 'Sales included' : 'Regular prices'}`;
+  // One linear scale over every value drawn; padded when they all coincide.
+  let lo = Math.min(stats.min, ref ?? stats.min), hi = Math.max(stats.max, ref ?? stats.max);
+  if (hi === lo) { const pad = Math.max(50, Math.round(lo * 0.05)); lo -= pad; hi += pad; }
+  const pos = c => (c - lo) / (hi - lo) * 100;
+  // Labels near the edges anchor inward so nothing is clipped.
+  const at = (c, cls) => { const x = pos(c); return x < 14 ? `class="lbl l ${cls}" style="left:${x}%"` : x > 86 ? `class="lbl r ${cls}" style="right:${100 - x}%"` : `class="lbl ${cls}" style="left:${x}%"`; };
+  let html = `<div class="track"></div><div class="range" style="left:${pos(stats.min)}%;width:${pos(stats.max) - pos(stats.min)}%"></div>`;
+  html += stats.prices.map(c => `<i class="dot" style="left:${pos(c)}%"></i>`).join('');
+  html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>Avg</span>`;
+  if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
+  html += `<span ${at(stats.min, 'end')}>${money(stats.min)}</span>`;
+  if (stats.max !== stats.min) html += `<span ${at(stats.max, 'end')}>${money(stats.max)}</span>`;
+  graph.innerHTML = html;
+  graph.setAttribute('aria-label', `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.` +
+    (ref != null ? ` This listing ${money(ref)}.` : ''));
+  sum.innerHTML = `<div>Min<b>${money(stats.min)}</b></div><div>Average<b>${money(Math.round(stats.avg))}</b></div><div>Max<b>${money(stats.max)}</b></div>`;
+}
+
+function rowHTML(r) {
+  const priceCell = !r.price ? `<span class="price na">Price unavailable</span>`
+    : r.price.sale ? `<span class="price sale">${money(r.price.cents)}<small>Sale · was <s>${money(r.price.regular)}</s></small></span>`
+    : `<span class="price">${money(r.price.cents)}</span>`;
+  return `<li class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}" data-id="${r.id}">
+    <label><input type="checkbox" data-id="${r.id}" ${r.checked ? 'checked' : ''} ${r.price ? '' : 'disabled'} aria-label="include ${escapeAttr(r.store)} in the comparison">
+      <span><span class="store">${escapeHtml(r.store)}${r.kind === 'similar' ? `<span class="sim">Similar · ${Math.round(r.score * 100)}%</span>` : ''}</span>
+        <span class="desc">${escapeHtml(r.desc)}</span></span>${priceCell}</label></li>`;
 }
 
 function renderProduct() {
-  const d = productData, p = d.product, g = d.group;
-  const tags = [p.product_type, p.product_subcategory, p.strain_type, p.weight_label, p.thc_display].filter(Boolean).join(' · ');
+  const d = productData, p = d.product;
+  const mine = productRows.find(r => r.is_this);
+  const cur = mine?.price;
   let html = `
-    <div class="hero">
-      ${p.image_url ? `<img src="${escapeAttr(p.image_url)}" alt="">` : ''}
-      <div class="info">
-        <div class="sub">${escapeHtml(p.brand_name || '')}</div>
-        <div class="name" id="productTitle">${escapeHtml(p.name)}</div>
-        <div class="sub">${escapeHtml(tags)}</div>
-        <div class="big">${money(p.price)} <span class="sub">at ${escapeHtml(p.dispensary_display)}</span></div>
-        <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View at ${escapeHtml(p.dispensary_display)} →</a>
-      </div>
-      <button class="close" data-close-product aria-label="Close">&times;</button>
-    </div>`;
-
-  if (!g && !d.similar.length) {
-    html += `<section><h3>Compare prices</h3><div class="sub">Nothing to compare this product with${d.sizes.length ? '' : ' (similarity data not built for this database yet)'}.</div></section>`;
-  } else {
-    const rows = priceRows(d);
-    const active = rows.filter(r => r.checked);
-    const prices = active.map(r => r.price);
-    const mine = rows.find(r => r.is_this);
-    const stores = new Set(active.map(r => r.dispensary_display)).size;
-    const what = active.length === stores ? `${active.length} dispensaries` : `${active.length} listings at ${stores} dispensaries`;
-    const stats = prices.length ? { min: Math.min(...prices), max: Math.max(...prices), avg: prices.reduce((a, b) => a + b, 0) / prices.length, med: median(prices) } : null;
-    let verdict = '';
-    // The verdict is measured against the median: with a handful of stores
-    // and the odd wrong match, one outlier moves the average a lot and the
-    // median not at all. The average stays on the stats line.
-    if (stats && mine?.checked && active.length > 1) {
-      const delta = mine.price - stats.med;
-      const rank = active.filter(r => r.price < mine.price).length + 1;
-      verdict = `<div class="verdict ${delta <= 0 ? 'good' : 'bad'}">${delta === 0 ? 'Right at' : `${money(Math.abs(delta))} ${delta < 0 ? 'under' : 'over'}`} the typical price at ${what} — #${rank} cheapest</div>`;
-    } else if (active.length <= 1) {
-      verdict = `<div class="verdict">Only ${active.length ? 'this listing is' : 'nothing is'} being compared — tick some rows below.</div>`;
-    } else {
-      verdict = `<div class="verdict">Comparing ${what}</div>`;      // the viewed store itself is unticked
-    }
-    const pos = v => stats.max === stats.min ? 50 : (v - stats.min) / (stats.max - stats.min) * 100;
-    const bar = stats && active.length > 1 ? `
-      <div class="pricebar"><i style="left:${pos(stats.med)}%" title="typical price (median)"></i>${mine?.checked ? `<i class="me" style="left:${pos(mine.price)}%" title="this dispensary"></i>` : ''}</div>
-      <div class="pricebar-ends"><span>${money(stats.min)}</span><span>${money(stats.max)}</span></div>
-      <div class="stats">${[['median', stats.med], ['average', stats.avg]]
-        .sort((a, b) => a[1] - b[1]).map(([k, v]) => `<span>${k} <b>${money(v)}</b></span>`).join('')}</div>` : '';
-    // Rank ticked rows only; the list itself stays in price order so a
-    // cheaper alternative is visible even before it is ticked.
-    let n = 0;
-    const rankOf = new Map(rows.filter(r => r.checked).map(r => [r.id, ++n]));
-    const limit = showAllOffers || rows.length <= 14 ? rows.length : 10;
-    // Always show the dispensary being viewed, even when it sits below the cut.
-    const shown = rows.slice(0, limit);
-    const mineIdx = rows.findIndex(r => r.is_this);
-    if (mineIdx >= limit) shown.push({ gap: true, skipped: mineIdx - limit }, rows[mineIdx]);
-    // Similar rows name their brand, unless the name already starts with it
-    // ("Lazercat Cannabis — Lazercat Live Rosin …" says it twice).
-    const brandOf = r => r.kind === 'similar' && r.brand_name && !r.name.toLowerCase().startsWith(r.brand_name.toLowerCase().split(' ')[0]) ? r.brand_name + ' — ' : '';
-    const listed = r => r.is_this ? escapeHtml(r.name)
-      : `<a class="open" href="#p=${r.id}" data-open="${r.id}" title="open this product">${escapeHtml(brandOf(r))}${escapeHtml(r.name)}</a>`;
-    const trs = shown.map(r => r.gap ? `<tr class="gap"><td colspan="7">… ${r.skipped} more ${r.skipped === 1 ? 'listing' : 'listings'} …</td></tr>` : `
-      <tr class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}">
-        <td class="chk"><input type="checkbox" data-row="${r.id}" data-kind="${r.kind}" ${r.checked ? 'checked' : ''} aria-label="include in comparison"></td>
-        <td class="rank">${rankOf.get(r.id) ?? ''}</td>
-        <td class="store">${escapeHtml(r.dispensary_display)}${r.kind === 'similar' ? `<span class="tag" title="a different product the matcher found similar">similar · ${Math.round(r.score * 100)}%</span>` : (r.confidence < 0.9 ? '<span class="lowconf" title="matched by name similarity, not an exact key">likely the same</span>' : '')}<span class="alt">${listed(r)}</span></td>
-        <td class="listed" title="${escapeAttr(r.name)}"><div class="clamp">${listed(r)}</div></td>
-        <td class="size ${r.otherSize ? 'other' : ''}" ${r.otherSize ? `title="only sold in this size — not the ${escapeAttr(sizeText(g, g.size_label) || 'compared')} size"` : ''}>${escapeHtml(r.size)}${r.otherSize ? ' ≠' : ''}</td>
-        <td class="num">${money(r.price)}${r.sale_price ? ` <span class="sub">sale ${money(r.sale_price)}</span>` : ''}</td>
-        <td class="num view"><a href="${escapeAttr(r.product_url)}" target="_blank" rel="noopener">view</a></td>
-      </tr>`).join('');
-    html += `<section><h3>Compare prices${g ? ` · ${escapeHtml(sizeText(g, g.size_label))}` : ''}</h3>${verdict}${bar}
-      <table class="offers"><thead><tr><th></th><th class="num rank">#</th><th>Dispensary</th><th class="listed">Listed as</th><th>Size</th><th class="num">Price</th><th class="view"></th></tr></thead><tbody>${trs}</tbody></table>
-      ${rows.length > limit ? `<button class="showall" data-showall>Show all ${rows.length} listings</button>` : ''}
-      <div class="sub" style="margin-top:8px">Ticked rows make up the range, average and median. The same product at other dispensaries starts ticked; similar products are listed too — tick one to count it. Your choices are remembered on this device.</div></section>`;
-  }
+    <button class="close" data-close-product aria-label="Close">&times;</button>
+    ${p.image_url ? `<img class="pimg" src="${escapeAttr(p.image_url)}" alt="">` : ''}
+    ${p.brand_name ? `<div class="brand">${escapeHtml(p.brand_name)}</div>` : ''}
+    <h2 class="pname" id="productTitle">${escapeHtml(p.name)}</h2>
+    ${attributes(p, d.group) ? `<div class="attrs">${escapeHtml(attributes(p, d.group))}</div>` : ''}
+    <div class="current">
+      ${cur ? `<div class="cprice ${cur.sale ? 'sale' : ''}">${money(cur.cents)}</div>${cur.sale ? `<div class="cwas"><s>${money(cur.regular)}</s>Regular price</div>` : ''}`
+            : `<div class="cprice">${money(cents(p.price) ?? 0)}</div>`}
+      <div class="cstore">${escapeHtml(p.dispensary_display)}</div>
+      <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>
+    </div>
+    <hr class="divider">
+    <h3>Price comparison${d.group?.size_label ? ` <span class="brand">· ${escapeHtml(sizeText(d.group))}</span>` : ''}</h3>
+    <div aria-live="polite"><div class="caption" id="cmpCaption"></div></div>
+    <div class="graph" id="cmpGraph" role="img"></div>
+    <div class="summary" id="cmpSummary" aria-live="polite"></div>
+    <ul class="rows" id="cmpRows">${productRows.map(rowHTML).join('')}</ul>`;
   el('productBody').innerHTML = html;
+  renderGraph(productRows, mine);
 }
 
+/* For dosed products the compared size is the dose, whatever label each
+   store used for it (".1g", "100milligrams" and "100mg" are the same gummy). */
+function sizeText(g) { return g.size_key.endsWith('mgTHC') ? g.size_key.replace('mgTHC', 'mg') : (g.size_label || ''); }
+
 el('productBody').addEventListener('change', e => {
-  const id = Number(e.target.dataset.row);
-  if (!id || !productData) return;
-  const c = productChoices;
-  if (e.target.dataset.kind === 'similar') e.target.checked ? c.on.add(id) : c.on.delete(id);
-  else e.target.checked ? c.off.delete(id) : c.off.add(id);
-  saveChoices(productData, c);
-  renderProduct();
+  const id = Number(e.target.dataset.id);
+  const row = productRows.find(r => r.id === id);
+  if (!row) return;
+  row.checked = e.target.checked;
+  row.kind === 'similar' ? (row.checked ? productChoices.on.add(id) : productChoices.on.delete(id))
+                         : (row.checked ? productChoices.off.delete(id) : productChoices.off.add(id));
+  saveChoices(productData, productChoices);
+  e.target.closest('li').classList.toggle('off', !row.checked);     // rows keep their place; only their emphasis changes
+  renderGraph(productRows, productRows.find(r => r.is_this));
 });
-el('productBody').addEventListener('click', e => {
-  if (e.target.closest('[data-close-product]')) { closeModal(); return; }
-  if (e.target.closest('[data-showall]')) { showAllOffers = true; renderProduct(); return; }
-  const open = e.target.closest('[data-open]');
-  if (open) { e.preventDefault(); openProduct(Number(open.dataset.open)); }
+el('productBody').addEventListener('click', e => { if (e.target.closest('[data-close-product]')) closeModal(); });
+// Keep keyboard focus inside the open modal.
+el('productModal').addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const f = [...el('productModal').querySelectorAll('button, a[href], input:not([disabled])')];
+  if (!f.length) return;
+  if (e.shiftKey && (document.activeElement === f[0] || document.activeElement === el('productModal'))) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
 });
+
 el('grid').addEventListener('click', e => {
   const card = e.target.closest('.card');
   if (!card) return;
   e.preventDefault();
-  openProduct(Number(card.dataset.id));
+  openProduct(Number(card.dataset.id), card);
 });
 {
   const m = location.hash.match(/^#p=(\d+)$/);
-  if (m) openProduct(Number(m[1]), false);
+  if (m) openProduct(Number(m[1]), null, false);
 }
 
 </script>

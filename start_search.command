@@ -1,54 +1,31 @@
 #!/bin/bash
-# Double-click launcher: starts the search server + a Cloudflare quick tunnel
-# if they aren't already running, then prints/copies the public URL.
-# Safe to double-click again later — it won't start duplicate processes.
+# Double-click helper for the site at https://milehighdispos.com.
+#
+# The server and the Cloudflare Tunnel are launchd agents now
+# (com.mauricereeves.milehighdispos-web / -tunnel), so they start at login and
+# restart on their own; this script just makes sure both are loaded, restarts
+# the server so a freshly pulled app.py is what's running, and prints status.
+# Logs: logs/web.log and logs/tunnel.log.
 
-set -e
 cd "$(dirname "$0")"
+UID_=$(id -u)
 
-mkdir -p logs
+echo "== Mile High Dispos =="
+for svc in web tunnel; do
+    label="com.mauricereeves.milehighdispos-$svc"
+    plist="$HOME/Library/LaunchAgents/$label.plist"
+    if ! launchctl print "gui/$UID_/$label" >/dev/null 2>&1; then
+        echo "Loading $label ..."
+        launchctl bootstrap "gui/$UID_" "$plist"
+    fi
+done
+# Restart the server (not the tunnel) so code changes take effect.
+launchctl kickstart -k "gui/$UID_/com.mauricereeves.milehighdispos-web"
+sleep 3
 
-echo "== Dutchie Product Search =="
-
-if pgrep -f "uvicorn app:app" > /dev/null; then
-    echo "Server already running."
-else
-    echo "Starting server..."
-    nohup ./.venv/bin/uvicorn app:app --port 8000 > logs/uvicorn.log 2>&1 &
-    disown
-    sleep 2
-fi
-
-if pgrep -f "cloudflared tunnel --url http://localhost:8000" > /dev/null; then
-    echo "Tunnel already running."
-else
-    echo "Starting Cloudflare tunnel..."
-    rm -f logs/cloudflared.log
-    # Run under a pty (via script(1)): cloudflared fully-buffers its output
-    # when writing straight to a redirected file, so the URL line can sit
-    # unflushed in memory for a long time. A pty makes it behave as if
-    # interactive and flush each line immediately.
-    nohup script -q /dev/null cloudflared tunnel --url http://localhost:8000 > logs/cloudflared.log 2>&1 &
-    disown
-    echo "Waiting for tunnel URL..."
-    for i in $(seq 1 20); do
-        sleep 1
-        if grep -qoE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' logs/cloudflared.log 2>/dev/null; then
-            break
-        fi
-    done
-fi
-
-URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' logs/cloudflared.log | head -1)
-
-echo ""
+echo
+launchctl list | grep milehighdispos | awk '{printf "%-45s pid %-6s last exit %s\n", $3, $1, $2}'
+echo
 echo "Local:  http://127.0.0.1:8000"
-if [ -n "$URL" ]; then
-    echo "Public: $URL"
-    echo "$URL" | pbcopy
-    echo "(public URL copied to clipboard)"
-else
-    echo "Public URL not found yet — check logs/cloudflared.log"
-fi
-echo ""
-read -p "Press Enter to close this window (the server keeps running in the background)..."
+echo "Public: https://milehighdispos.com"
+curl -s -o /dev/null -w "Public check: HTTP %{http_code}\n" https://milehighdispos.com/ || true

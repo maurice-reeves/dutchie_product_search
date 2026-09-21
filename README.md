@@ -266,94 +266,74 @@ would print the raw timestamp on the card.
 
 ---
 
-## One-step launcher (`start_search.command`)
+## Running it as a service (`milehighdispos.com`)
 
-Double-click **`start_search.command`** in Finder (it is marked
-executable) to bring everything up at once:
+The site is served at **https://milehighdispos.com** through a named
+**Cloudflare Tunnel**: the domain's DNS is on Cloudflare (nameservers set at
+the registrar, Spaceship), `milehighdispos.com` and `www` are proxied CNAMEs
+to the tunnel, and a `cloudflared` process on this Mac carries requests to
+`localhost:8000`. No port is opened on the router, the Mac's IP is never
+public, and Cloudflare provides the HTTPS certificate.
 
-1. Starts `uvicorn app:app --port 8000` if it is not already running
-   (logs to `logs/uvicorn.log`).
-2. Starts a **Cloudflare quick tunnel** if one is not already running
-   (logs to `logs/cloudflared.log`).
-3. Waits for the public URL, prints both the local and public URLs, and
-   copies the public URL to the clipboard (`pbcopy`).
+Two launchd agents keep it up — they start at login and restart on their
+own if they die:
 
-It is safe to double-click again later — it checks for the running
-processes (`pgrep`) and will not start duplicates. Closing the Terminal
-window that opens does **not** stop the server or tunnel; they keep
-running in the background (`nohup` + `disown`).
+| Agent | Runs | Log |
+| --- | --- | --- |
+| `com.mauricereeves.milehighdispos-web` | `~/milehighdispos_web.sh` → `.venv/bin/python -m uvicorn app:app --port 8000` | `logs/web.log` |
+| `com.mauricereeves.milehighdispos-tunnel` | `~/milehighdispos_tunnel.sh` → `cloudflared tunnel run --token … milehighdispos` | `logs/tunnel.log` |
 
-To stop them:
+The two shell entry points live in `$HOME`, not the repo, for the same
+reason as the scraper's wrapper: macOS TCC refuses to let launchd execute a
+file under `~/Desktop`. The tunnel's run token sits in
+`~/.cloudflared/milehighdispos.token` (mode 600); its ingress rules
+(hostname → `http://localhost:8000`) are stored in Cloudflare, not in a
+local config file.
 
-```bash
-pkill -f "uvicorn app:app"
-pkill -f "cloudflared tunnel"
-```
-
----
-
-## Sharing it publicly with Cloudflare
-
-The app has no auth and binds to localhost. To let someone else reach it
-without deploying anything, the launcher uses a **Cloudflare quick
-tunnel** — an ephemeral, zero-config tunnel from a random
-`*.trycloudflare.com` hostname to your local port 8000.
-
-### What you need
-
-Install `cloudflared` (the Cloudflare Tunnel client):
+Day to day:
 
 ```bash
-brew install cloudflared
+# after pulling a change to app.py (index.html is served live, no restart needed)
+launchctl kickstart -k gui/$(id -u)/com.mauricereeves.milehighdispos-web
+
+# status / logs
+launchctl list | grep milehighdispos
+tail -f logs/web.log logs/tunnel.log
+
+# stop / start
+launchctl bootout gui/$(id -u)/com.mauricereeves.milehighdispos-web
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mauricereeves.milehighdispos-web.plist
 ```
 
-No Cloudflare account, login, or DNS setup is required for a quick
-tunnel.
+Double-clicking **`start_search.command`** does the common case: loads the
+agents if needed, restarts the server so fresh code is running, and prints
+the status and URLs.
 
-### Run it manually
+The nightly refresh does not need a restart: `import_products.py` rewrites
+the database file and `app.py` opens it per request.
 
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
+### Cloudflare-side setup (done once, 2026-09-20)
 
-`cloudflared` prints a line like:
+Recorded so it can be repeated on another machine or another domain. All of
+it is API-driven with a token scoped to the zone (Account: *Cloudflare
+Tunnel Edit*, *Account Settings Read*; Zone: *DNS Edit*, *Zone Read*):
 
-```
-https://random-words-1234.trycloudflare.com
-```
+1. Add the domain to Cloudflare (free plan) and set its two nameservers at
+   the registrar.
+2. Create a remotely-configured tunnel:
+   `POST /accounts/{account}/cfd_tunnel` with `config_src: "cloudflare"`.
+3. Ingress: `PUT /accounts/{account}/cfd_tunnel/{id}/configurations` with
+   rules for `milehighdispos.com` and `www.milehighdispos.com` →
+   `http://localhost:8000`, then `http_status:404`.
+4. DNS: proxied `CNAME` records for the apex and `www` pointing at
+   `{tunnel-id}.cfargotunnel.com` (delete any parking `A` records the scan
+   imported).
+5. Fetch the run token (`GET …/cfd_tunnel/{id}/token`) into
+   `~/.cloudflared/milehighdispos.token` and start the agent.
 
-Anyone with that URL can use the search UI for as long as the tunnel
-process stays running.
-
-### How the launcher handles it
-
-`start_search.command` runs the tunnel through a pseudo-terminal:
-
-```bash
-nohup script -q /dev/null cloudflared tunnel --url http://localhost:8000 \
-  > logs/cloudflared.log 2>&1 &
-```
-
-The `script -q /dev/null` wrapper is deliberate: when `cloudflared`
-writes straight to a redirected file it fully buffers stdout, so the URL
-line can sit unflushed for a long time. Running it under a pty makes it
-behave as if interactive and flush each line immediately, so the script
-can `grep` the URL out of the log within a couple of seconds.
-
-### Notes and caveats
-
-- **Ephemeral URL.** Each tunnel run gets a new random hostname. There is
-  no way to reserve one on a quick tunnel — for a stable domain you need
-  a named tunnel tied to a Cloudflare account and a domain.
-- **No access control.** Anyone with the link can see everything. The
-  data is scraped public product listings, but treat the URL as
-  semi-secret and shut the tunnel down when you are done.
-- **Rate limits / longevity.** Quick tunnels are best-effort and intended
-  for testing; Cloudflare may throttle or drop long-lived ones.
-- **Find the current URL later:**
-  ```bash
-  grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' logs/cloudflared.log | head -1
-  ```
+Moving the site to another machine is steps 5 only: same token, same
+agents. To retire the tunnel, delete it in Cloudflare (Zero Trust →
+Networks → Tunnels) and remove the two CNAMEs.
 
 ---
 
@@ -545,11 +525,15 @@ logs/                  uvicorn.log, cloudflared.log; git-ignored
   empty; run `import_products.py`.
 - **Public URL "not found yet"** — check `logs/cloudflared.log`; the
   tunnel may still be connecting, or `cloudflared` is not installed.
-- **Port 8000 already in use** — an old `uvicorn` is still running;
-  `pkill -f "uvicorn app:app"`.
+- **Port 8000 already in use** — a hand-started `uvicorn` is fighting the
+  agent; `pkill -f "uvicorn app:app"` and let launchd bring its own back.
 - **No restock badges** — restock detection needs two snapshots. Run
   `backfill_snapshots.py` to seed history from CSVs already on disk.
-- **Public URL stops working** — quick tunnels are ephemeral and get a new
-  random hostname every time `cloudflared` restarts, so any link you shared
-  previously is dead. Re-run `start_search.command` for a fresh one.
+- **milehighdispos.com is down but `127.0.0.1:8000` works** — the tunnel
+  agent: `tail logs/tunnel.log`, then
+  `launchctl kickstart -k gui/$(id -u)/com.mauricereeves.milehighdispos-tunnel`.
+  Cloudflare's dashboard (Zero Trust → Networks → Tunnels) shows whether the
+  tunnel is connected.
+- **Both are down after a reboot** — the agents run in the logged-in user
+  session; log in once and they start.
 ```

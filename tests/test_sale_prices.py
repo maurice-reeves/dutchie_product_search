@@ -69,3 +69,16 @@ def test_import_rejects_placeholder_specials(tmp_path, special, expected):
     pd.DataFrame([row]).to_csv(path, index=False)
     actual = import_csv.dutchie_products(path).iloc[0]['sale_price']
     assert pd.isna(actual) if expected is None else actual == expected
+
+
+def test_import_keeps_one_row_per_listing(tmp_path):
+    """A product served on two menu pages arrives twice in the CSV; the
+    feed must show it once. Keys on the Dutchie id and the dispensary."""
+    row = dict.fromkeys(import_csv.USE_COLUMNS, '')
+    row.update(Name='Bernie Hanna Butter', Image='https://example.com/i.png', Prices=5.84, id='6a1e',
+               dispensary='golden-meds-lakewood', Options="['1g']", createdAt='2026-06-02', updatedAt='2026-09-21', type='Flower')
+    other_store = dict(row, dispensary='golden-meds-superstore')
+    path = tmp_path / 'products.csv'
+    pd.DataFrame([row, row, other_store]).to_csv(path, index=False)
+    out = import_csv.dutchie_products(path)
+    assert len(out) == 2 and sorted(out['dispensary_slug']) == ['golden-meds-lakewood', 'golden-meds-superstore']

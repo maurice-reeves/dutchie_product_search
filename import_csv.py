@@ -134,6 +134,15 @@ def dutchie_products(csv_path: Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path, usecols=lambda c: c in USE_COLUMNS, low_memory=False)
     print(f"Loaded {len(df):,} rows")
 
+    # One row per listing. Dutchie's page order is not stable between page
+    # requests, so a scrape can hold a product twice (1,298 of 52,296 rows
+    # on 2026-09-21); the scraper now drops those, but older CSVs have them
+    # and this keeps the feed from showing one card twice either way.
+    before = len(df)
+    df = df.drop_duplicates(subset=["id", "dispensary"], keep="first")
+    if len(df) < before:
+        print(f"Dropped {before - len(df):,} repeated (id, dispensary) rows")
+
     df = df[df["Name"].notna() & df["Image"].notna()].copy()
 
     df["price"] = pd.to_numeric(df["Prices"], errors="coerce")

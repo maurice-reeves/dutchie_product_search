@@ -91,7 +91,19 @@ def textures_of(name) -> frozenset:
     return frozenset(TEXTURES[t] for t in toks if t in TEXTURES)
 
 
-def format_of(name):
+def format_of(name, subcategory=None):
+    """The vape form: from the subcategory when it states one, else from the
+    name's words. The subcategory comes from the store's POS category and
+    outranks a typed name -- Green Valley sold a 2 g cartridge *and* a 2 g
+    disposable of the same strain under one name; only the subcategory
+    ("cartridges" vs "disposables") told them apart."""
+    sub = re.sub(r"[^a-z0-9]+", " ", str(subcategory or "").lower()).split()
+    if sub:
+        if "all" in sub and "one" in sub:
+            return "aio"
+        for t in sub:
+            if t in FORMATS:
+                return FORMATS[t]
     toks = re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).split()
     if "all" in toks and "one" in toks:
         return "aio"
@@ -370,7 +382,7 @@ def build_groups(df: pd.DataFrame, E: np.ndarray, I: np.ndarray, D: np.ndarray, 
     # Built as object columns on purpose: under pandas 3 a str column turns
     # None into NaN, and NaN != NaN would make every missing strain a conflict.
     df["strain"] = pd.Series([strain_of(n) for n in df["name"]], index=df.index, dtype=object)
-    df["format"] = pd.Series([format_of(n) for n in df["name"]], index=df.index, dtype=object)
+    df["format"] = pd.Series([format_of(n, c) for n, c in zip(df["name"], df.product_subcategory)], index=df.index, dtype=object)
     df["texture"] = [textures_of(n) for n in df["name"]]
     lib = None
     if dutchie_csv is not None:
@@ -394,10 +406,13 @@ def build_groups(df: pd.DataFrame, E: np.ndarray, I: np.ndarray, D: np.ndarray, 
     def conflict(i, j):
         return strain[i] is not None and strain[j] is not None and strain[i] != strain[j]
 
-    # The listing name as written, for the duplicate-aware store check: two
-    # entries at one store are the same SKU only if they say the same thing
-    # (the size-stripped key would call a 1000mg and a 2000mg the same).
-    df["listing"] = df["name"].fillna("").str.lower().str.replace(r"\s+", " ", regex=True).str.strip()
+    # The listing as written plus its subcategory, for the duplicate-aware
+    # store check: two entries at one store are the same SKU only if they say
+    # the same thing (the size-stripped key would call a 1000mg and a 2000mg
+    # the same) and sit in the same POS category (a store typed one name for
+    # a cartridge and a disposable of the same strain).
+    df["listing"] = (df["name"].fillna("").str.lower().str.replace(r"\s+", " ", regex=True).str.strip()
+                     + "|" + df.product_subcategory.fillna("").str.lower())
     g = Groups(df.dispensary_display, df["strain"], df["format"], df["pack"], df["texture"], df["listing"])
     stats = {"duplicate": 0, "exact_jane": 0, "name": 0, "library+name": 0, "fuzzy": 0}
     df["dkey"] = np.where((df.bn != "") & (df.nn != ""), df.block + "|" + df.nn, None)

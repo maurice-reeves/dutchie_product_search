@@ -340,6 +340,7 @@
   .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .rows .store { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; }
   .rows .desc { overflow-wrap: anywhere; display: block; font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .rows .cat { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }   /* type · subcategory: a check that it really is the same thing */
   .rows .price { text-align: right; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .rows .price.sale { color: var(--sale); }
   .rows .price small { display: block; font-size: 13px; font-weight: 400; color: var(--text-muted); margin-top: 3px; }
@@ -732,13 +733,13 @@ function buildRows(d) {
   // worth comparing if it is the same maker's Pineapple, and the name
   // alone can't tell you that.
   const describe = x => [x.brand_name, x.display_name || x.name].filter(Boolean).join(' · ');
-  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: describe(o),
+  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: describe(o), cat: categoryText(o),
     price: o.id === p.id && Object.hasOwn(p, 'sale_price') ? applicablePrice(p.price, p.sale_price) : applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {
     if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
     const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
     rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
-      desc: describe(s), price, checked: price != null && productChoices.on.has(s.id) });
+      desc: describe(s), cat: categoryText(s), price, checked: price != null && productChoices.on.has(s.id) });
   }
   // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
   return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));
@@ -751,13 +752,18 @@ function selectedStats(rows) {
            sales: rows.some(r => r.checked && r.price?.sale), prices: xs };
 }
 
+/* "Flower · Small buds": the type and subcategory of any listing. */
+function categoryText(x) {
+  const sub = (x.product_subcategory || '').replace(/-/g, ' ');
+  return [x.product_type, sub && sub[0].toUpperCase() + sub.slice(1)].filter(Boolean).join(' · ');
+}
+
 /* The line under the title: the card's descriptor, then type, subcategory
    and size. No strain type and no THC -- neither helps decide between two
    listings of the same thing, which is what this screen is for. */
 function attributes(p, g) {
-  const sub = (p.product_subcategory || '').replace(/-/g, ' ');
   const size = g ? sizeText(g) : p.weight_label;                                     // the dose for dosed products, not ".1g"
-  return [p.display_detail, p.product_type, sub && sub[0].toUpperCase() + sub.slice(1), size].filter(Boolean).join(' · ');
+  return [p.display_detail, categoryText(p), size].filter(Boolean).join(' · ');
 }
 
 /* Everything derived from the ticks is drawn by this one function, so the
@@ -818,7 +824,7 @@ function rowHTML(r) {
   const desc = [r.desc, r.kind === 'similar' ? `Similar ${Math.round(r.score * 100)}%` : '', r.is_this ? 'This listing' : ''].filter(Boolean).join(' · ');
   return `<li class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}" data-id="${r.id}">
     <label><input type="checkbox" data-id="${r.id}" ${r.checked ? 'checked' : ''} ${r.price ? '' : 'disabled'} aria-label="include ${escapeAttr(r.store)} in the comparison">
-      <span><span class="store">${escapeHtml(r.store)}</span><span class="desc">${escapeHtml(desc)}</span></span>${priceCell}</label></li>`;
+      <span><span class="store">${escapeHtml(r.store)}</span><span class="desc">${escapeHtml(desc)}</span>${r.cat ? `<span class="cat">${escapeHtml(r.cat)}</span>` : ''}</span>${priceCell}</label></li>`;
 }
 
 function renderProduct() {

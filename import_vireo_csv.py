@@ -159,6 +159,7 @@ def vireo_products(csv_path: Path) -> pd.DataFrame:
         "name": df["name"],
         "image_url": df["image_urls"].map(first_image),
         "price": df["price"],
+        "sale_price": pd.Series([None] * len(df), dtype="float", index=df.index),   # Jane specials are not mapped
         "brand_name": df["brand"].fillna(""),
         "product_type": [product_type(k, s, n) for k, s, n in zip(df["kind"], df["root_subtype"], df["name"])],
         "product_subcategory": [subcategory(k, s, b) for k, s, b in zip(df["kind"], df["root_subtype"], df.get("brand_subtype"))],

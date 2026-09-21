@@ -450,8 +450,14 @@ it returns the product alone and the popup degrades.
 
 Deterministic first, model second, and every group carries a confidence
 (see `PLAN_similar_products.md` for the calibration; 94/100 on a hand-labelled
-sample of cross-store pairs). In order:
+sample of cross-store pairs, and on 2026-09-21 ~85% precision on the fuzzy
+tiers / ~79% pair-level recall on 240 judged pairs). In order:
 
+0. A store's duplicate entries of one listing (same brand, type, size and
+   name as written — a med and a rec entry, a re-listed SKU) are one
+   product (1.0). Merged first so the store rule below never treats the
+   second entry as a variant; before this tier 1,370 products were split
+   over two groups that could never join.
 1. Jane `product_id` — a real catalog key (1.0).
 2. Identical normalised name within a **block** = brand + type + size (0.95).
    Sizes/doses and brand words are stripped from the name; parenthetical
@@ -463,12 +469,15 @@ sample of cross-store pairs). In order:
    only proposes pairs that still need distinctive-token overlap ≥ 0.8 and
    embedding cosine ≥ 0.90 (0.9).
 4. FAISS neighbours in the same block with cosine ≥ 0.92 and distinctive-token
-   overlap ≥ 0.8 (confidence = cosine). "Distinctive" = after removing
-   category words (live, rosin, cart, gummies, …) — otherwise every Lazercat
-   item looks like every other.
-5. Group-level vetoes on every merge: never two rows from the same dispensary,
-   never two different stated strains, formats (cartridge vs AIO vs kit) or
-   pack counts. Checking at the group level is what stops A↔B↔C chains.
+   overlap ≥ 0.8, or cosine ≥ 0.93 and overlap ≥ 0.6 (`FUZZY`; confidence =
+   cosine). "Distinctive" = after removing category words (live, rosin,
+   cart, gummies, …) — otherwise every Lazercat item looks like every other.
+5. Group-level vetoes on every merge: never two different stated strains,
+   formats (cartridge vs AIO vs kit), pack counts or concentrate textures
+   (resin vs sugar vs badder…), and never two rows from the same dispensary
+   *unless* both groups hold the same listing name at that store — that
+   overlap is a duplicate entry, not a variant. Checking at the group level
+   is what stops A↔B↔C chains.
 
 Matching is deliberately not the last word: every row has a checkbox,
 the choices are remembered per product in `localStorage` (key

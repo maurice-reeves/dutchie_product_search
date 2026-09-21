@@ -2,3 +2,5 @@ pandas
 fastapi
 uvicorn[standard]
 psutil
+pytest
+httpx  # FastAPI's TestClient

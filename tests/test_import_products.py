@@ -178,3 +178,87 @@ def test_refresh_similarity_skips_when_no_interpreter(monkeypatch):
     monkeypatch.setattr(ip, "similarity_python", lambda: None)
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run")))
     assert ip.refresh_similarity(Path("x.csv"), None) is False
+
+
+def test_refresh_similarity_honours_db_override(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ip, "similarity_python", lambda: "/opt/ml/bin/python")
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **k: calls.append(cmd) or SimpleNamespace(returncode=0))
+    assert ip.refresh_similarity(Path("/tmp/d.csv"), None, db=Path("/tmp/stage.db")) is True
+    assert calls[0][calls[0].index("--db") + 1] == "/tmp/stage.db"
+
+
+# ---- atomic publish ---------------------------------------------------------
+
+def test_prepare_staging_copies_first_seen_and_leaves_live_alone(tmp_path):
+    live = tmp_path / "products.db"
+    conn = sqlite3.connect(live)
+    conn.execute("CREATE TABLE first_seen (product_id, dispensary_slug, first_seen)")
+    conn.execute("INSERT INTO first_seen VALUES ('1', 'jars-16th', '2026-09-01')")
+    conn.execute("CREATE TABLE products (id, name)")
+    conn.execute("INSERT INTO products VALUES (1, 'old')")
+    conn.commit(); conn.close()
+
+    staging = ip.prepare_staging(live)
+    assert staging != live and staging.exists()
+    sconn = sqlite3.connect(staging)
+    assert sconn.execute("SELECT first_seen FROM first_seen").fetchone() == ("2026-09-01",)
+    sconn.execute("DELETE FROM products")
+    sconn.commit(); sconn.close()
+    # live still has the old row -- the site can keep serving it
+    assert sqlite3.connect(live).execute("SELECT name FROM products").fetchone() == ("old",)
+
+
+def test_prepare_staging_with_no_live_file_is_a_fresh_path(tmp_path):
+    live = tmp_path / "missing.db"
+    staging = ip.prepare_staging(live)
+    assert not staging.exists() and staging.name.endswith(".staging")
+
+
+def test_write_database_on_staging_does_not_touch_live(tmp_path, monkeypatch):
+    live = tmp_path / "products.db"
+    monkeypatch.setattr(ip, "DB_PATH", live)
+    monkeypatch.setattr(ip, "RESTOCK_TRACKING", False)
+    conn = sqlite3.connect(live)
+    conn.execute("CREATE TABLE products (id, name)")
+    conn.execute("INSERT INTO products VALUES (1, 'old')")
+    conn.execute("CREATE TABLE first_seen (product_id TEXT, dispensary_slug TEXT, first_seen TEXT, PRIMARY KEY (product_id, dispensary_slug))")
+    conn.execute("INSERT INTO first_seen VALUES ('keep', 'a', '2026-09-01')")
+    conn.commit(); conn.close()
+
+    staging = ip.prepare_staging(live)
+    ip.write_database(products_frame(), [Path("d.csv")], dest=staging)
+
+    assert sqlite3.connect(live).execute("SELECT name FROM products").fetchone() == ("old",)
+    sconn = sqlite3.connect(staging)
+    assert sconn.execute("SELECT count(*) FROM products").fetchone() == (2,)
+    assert ("keep", "a", "2026-09-01") in sconn.execute("SELECT * FROM first_seen").fetchall()
+
+
+def test_publish_database_replaces_live_and_clears_sidecars(tmp_path):
+    live = tmp_path / "products.db"
+    live.write_text("old")
+    (tmp_path / "products.db-wal").write_text("stale")
+    staging = tmp_path / "products.db.staging"
+    staging.write_text("new")
+    ip.publish_database(staging, live)
+    assert live.read_text() == "new"
+    assert not staging.exists()
+    assert not (tmp_path / "products.db-wal").exists()
+
+
+def test_publish_after_write_preserves_first_seen_dates(tmp_path, monkeypatch):
+    live = tmp_path / "products.db"
+    monkeypatch.setattr(ip, "DB_PATH", live)
+    monkeypatch.setattr(ip, "RESTOCK_TRACKING", False)
+    ip.write_database(products_frame(), [Path("d.csv")])
+    conn = sqlite3.connect(live)
+    conn.execute("UPDATE first_seen SET first_seen = '2026-01-01'")
+    conn.commit(); conn.close()
+
+    staging = ip.prepare_staging(live)
+    ip.write_database(products_frame(), [Path("d.csv")], dest=staging)
+    ip.publish_database(staging, live)
+    dates = {row[0] for row in sqlite3.connect(live).execute("SELECT first_seen FROM first_seen")}
+    assert dates == {"2026-01-01"}          # INSERT OR IGNORE kept the original
+

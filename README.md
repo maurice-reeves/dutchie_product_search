@@ -27,12 +27,13 @@ vireo_products*.csv    ─┘   one products table   products + FTS5            
 1. **`import_products.py`** — the nightly import. Maps each scraper's CSV to
    the same ~20 product columns (`import_csv.py` for Dutchie's ~170-column
    CSV, `import_vireo_csv.py` for Jane's), merges them — when a store is on
-   both platforms the Jane copy wins — writes `data/products.db`, records
-   when each product was first seen, and rebuilds the product popup's
-   tables (`build_similarity.py`). See [Combining the two sources](#combining-the-two-sources).
+   both platforms the Jane copy wins — writes a staging copy of
+   `data/products.db`, records when each product was first seen, rebuilds
+   the product popup's tables (`build_similarity.py`), then atomically
+   replaces the live file. See [Combining the two sources](#combining-the-two-sources).
 2. **`app.py`** — a FastAPI app that queries `products.db` on every
-   request (the DB file is opened fresh per request, so re-importing does
-   not require a server restart) and also serves the static frontend.
+   request (the DB file is opened fresh per request, so a published import
+   does not require a server restart) and also serves the static frontend.
 3. **`static/index.html`** — a single self-contained page (vanilla JS, no
    build step, light/dark aware) that calls the JSON API.
 
@@ -95,7 +96,7 @@ adds the two columns to an existing database without touching row ids.
   Indexed on `price`, `product_type`, `dispensary_display`, `created_at`.
 - **`products_fts`** — an FTS5 virtual table over `name`, `brand_name`,
   and `dispensary_display`, contentless (mirrors `products` by rowid).
-  Powers the free-text search box with prefix matching.
+  Powers the free-text search box with prefix matching on each word (AND).
 - **`import_meta`** — a single row: `source_csv` (both CSVs), `row_count`,
   `imported_at`. Shown under the page title as "Refreshed …".
 - **`first_seen`** — `(product_id, dispensary_slug) → first_seen`, the date
@@ -229,8 +230,10 @@ PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
 
 <http://127.0.0.1:8000>
 
-Re-importing new data does **not** need a server restart — just refresh
-the page.
+Re-importing new data does **not** need a server restart — the import builds
+a staging file and `os.replace`s it into place; the next page load opens the
+new database. The public site keeps serving the previous catalogue until
+that replace.
 
 ### 4. Vireo's Jane stores
 
@@ -319,8 +322,10 @@ Double-clicking **`start_search.command`** does the common case: loads the
 agents if needed, restarts the server so fresh code is running, and prints
 the status and URLs.
 
-The nightly refresh does not need a restart: `import_products.py` rewrites
-the database file and `app.py` opens it per request.
+The nightly refresh does not need a restart: `import_products.py` builds a
+staging copy (products, then the popup tables) and atomically replaces
+`data/products.db`; `app.py` opens the path per request, so the next hit
+sees the new file. The previous catalogue stays up for the whole rebuild.
 
 ### Cloudflare-side setup (done once, 2026-09-20)
 
@@ -349,7 +354,7 @@ Networks → Tunnels) and remove the two CNAMEs.
 
 ## Product popup: same product elsewhere, similar products
 
-Clicking a card opens a modal: a compact header (image, brand, full name,
+Clicking a card opens a modal: a compact header (brand, full name,
 one attributes line), the listing's own price — the sale price when the
 menu shows one, regular price struck through beneath — a "View dispensary"
 button, then **one price comparison**: a horizontal graph and a checkable
@@ -379,17 +384,22 @@ importing both in one process segfaults on macOS.
 ### Keeping the popup's tables fresh
 
 The four tables reference products by **row id**, and every import replaces
-the `products` table and reassigns the ids. So `import_products.py`:
+the `products` table and reassigns the ids. So `import_products.py` does
+the rebuild on a **staging copy** of the live database:
 
-1. drops the four tables right after writing `products` — the popup then
-   shows the product alone (it checks for `product_groups`) instead of
-   another row's offers;
-2. runs `build_similarity.py all` for the new database once the import is
-   done (both CSVs passed along for the per-size prices), under the first
+1. copies the live file (so `first_seen` and snapshots survive) and drops
+   the four tables there — the live site is untouched, still serving the
+   previous catalogue and its popup;
+2. runs `build_similarity.py all` against the staging file once the import
+   is done (both CSVs passed along for the per-size prices), under the first
    interpreter it finds that can import both `faiss` and
    `sentence_transformers` (the venv, `python3` on `PATH`, then
    `/usr/local/bin/python3`). `SIMILARITY_PYTHON=/path/to/python` names one
-   explicitly; `SIMILARITY_PYTHON=` (empty) or `--no-similarity` skips it.
+   explicitly; `SIMILARITY_PYTHON=` (empty) or `--no-similarity` skips it;
+3. `os.replace`s the staging file onto `data/products.db`. One cutover:
+   new products and new popup tables appear together. A failed or skipped
+   rebuild still publishes the products (the popup then shows the product
+   alone — it checks for `product_groups`).
 
 A failed or skipped rebuild never fails the import — the products are
 already on disk — it just leaves the popup in "product only" mode until the
@@ -487,7 +497,7 @@ labels that are not weights (`single`, `5pack`) sort last.
 
 | Param          | Type   | Default       | Notes                                                            |
 | -------------- | ------ | ------------- | -------------------------------------------------------------- |
-| `q`            | string | `""`          | free text over name / brand / dispensary (prefix match, FTS5) |
+| `q`            | string | `""`          | free text over name / brand / dispensary; each word is an FTS5 prefix term, AND-ed. Quotes in the box are stripped so they cannot break `MATCH`. |
 | `product_type` | string[] | —           | repeatable; values OR together                                 |
 | `dispensary`   | string[] | —           | repeatable; values OR together                                 |
 | `brand`        | string[] | —           | repeatable; values OR together                                 |

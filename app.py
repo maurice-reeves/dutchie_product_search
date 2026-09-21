@@ -26,7 +26,7 @@ app = FastAPI(title="Dutchie Product Search", lifespan=dashboard.lifespan)
 
 
 def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -76,6 +76,25 @@ FACET_COLUMNS = {
     "weights": "weight_label",
 }
 
+# FTS5 MATCH is its own language. Wrapping the raw box contents in quotes used
+# to 500 on a typed `"`, and treated "wyld gummies" as one phrase (so a row
+# with those words out of order missed). Each token is a prefix term; quotes
+# are stripped (we add our own); punctuation-only tokens are dropped.
+_FTS_TOKEN = re.compile(r"[^\s\"]+")
+
+
+def fts_match_query(q: str) -> Optional[str]:
+    """Safe FTS5 MATCH expression, or None if there is nothing to search."""
+    terms = []
+    for raw in _FTS_TOKEN.findall(q or ""):
+        token = raw.replace('"', "")
+        if not token or not any(ch.isalnum() for ch in token):
+            continue
+        terms.append(f'"{token}"*')
+    if not terms:
+        return None
+    return " AND ".join(terms)
+
 
 def facet_conditions(selections: dict, exclude: str = None, q: str = ""):
     """WHERE fragments for every selected facet except `exclude`.
@@ -86,9 +105,10 @@ def facet_conditions(selections: dict, exclude: str = None, q: str = ""):
     a second brand.
     """
     where, params = [], []
-    if q.strip():
+    match = fts_match_query(q)
+    if match:
         where.append("id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)")
-        params.append(f'"{q.strip()}"*')
+        params.append(match)
     for name, column in FACET_COLUMNS.items():
         if name == exclude:
             continue
@@ -207,11 +227,12 @@ def search(
         # joins products_fts, which has its own name / brand_name /
         # dispensary_display columns, so a bare reference is ambiguous and
         # SQLite rejects the whole query.
-        if q.strip():
+        match = fts_match_query(q)
+        if match:
             where.append(
                 "products.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)"
             )
-            params.append(f'"{q.strip()}"*')
+            params.append(match)
 
         # Each filter is multi-select: repeated query params become a list and
         # widen the match rather than narrowing it. Different filters still AND
@@ -236,7 +257,7 @@ def search(
         where_clause = f"WHERE {' AND '.join(where)}" if where else ""
 
         order = {
-            "relevance": "products.id" if not q.strip() else "rank",
+            "relevance": "products.id" if not match else "rank",
             # Sort by the applicable price -- the sale price when there is one --
             # so the order matches the number shown on the card.
             "price_asc": "COALESCE(products.sale_price, products.price) ASC",
@@ -245,7 +266,7 @@ def search(
             "newest": "products.created_at DESC",
         }[sort]
 
-        if q.strip() and sort == "relevance":
+        if match and sort == "relevance":
             base = f"""
                 SELECT products.*, products_fts.rank AS rank
                 FROM products JOIN products_fts ON products.id = products_fts.rowid

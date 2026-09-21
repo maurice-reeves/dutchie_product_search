@@ -69,14 +69,36 @@ def test_groups_refuse_same_store_strain_and_format_clashes():
     stores = pd.Series(["A", "B", "C", "A", "D", "E"])
     strains = ["hybrid", None, "sativa", None, None, None]
     formats = [None, None, None, "cart", "aio", None]
-    g = bs.Groups(stores, strains, formats)
+    names = ["x 1g", "x", "x", "x 2g", "x", "x"]
+    g = bs.Groups(stores, strains, formats, names=names)
     assert g.union(0, 1, "fuzzy", 0.95)            # hybrid + unmarked: fine
     assert not g.union(1, 2, "fuzzy", 0.95)        # would chain sativa into the hybrid group -> refused
-    assert not g.union(0, 3, "fuzzy", 0.95)        # same store A twice -> refused
+    assert not g.union(0, 3, "fuzzy", 0.95)        # store A lists two different things -> refused
     assert g.union(3, 5, "fuzzy", 0.95)            # cart + unmarked: fine
     assert not g.union(5, 4, "fuzzy", 0.95)        # would chain an aio into the cart group -> refused
     assert g.refused == 3
     assert g.find(0) == g.find(1) and g.find(0) != g.find(2)
+
+
+def test_groups_allow_a_store_listing_the_same_thing_twice():
+    """A store's duplicate entries (med + rec, a re-listed SKU) share a name;
+    that overlap must not keep the product's stores apart."""
+    stores = pd.Series(["A", "A", "B", "A"])
+    names = ["blue dream 1g", "blue dream 1g", "blue dream 1g", "blue dream 2g"]
+    g = bs.Groups(stores, [None] * 4, [None] * 4, names=names)
+    assert g.union(0, 1, "duplicate", 1.0)         # the duplicate itself
+    assert g.union(2, 1, "name", 0.95)             # store B joins a group that holds A twice: fine
+    assert not g.union(0, 3, "name", 0.95)         # A's 2g is a variant, not a duplicate -> refused
+    assert g.find(0) == g.find(1) == g.find(2) != g.find(3)
+
+
+def test_groups_refuse_different_textures_but_allow_overlap():
+    g = bs.Groups(pd.Series(["A", "B", "C"]), [None] * 3, [None] * 3, None,
+                  textures=[{"resin"}, {"resin", "badder"}, {"sugar"}])
+    assert g.union(0, 1, "fuzzy", 0.95)            # live resin + live resin badder: overlap, fine
+    assert not g.union(1, 2, "fuzzy", 0.95)        # live sugar is a different product -> refused
+    assert bs.textures_of("Live Resin Badder - Blue Dream") == {"resin", "badder"}
+    assert bs.textures_of("Blue Dream 1g") == frozenset()
 
 
 def test_groups_refuse_different_stated_pack_counts_but_allow_unstated():

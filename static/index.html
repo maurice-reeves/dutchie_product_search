@@ -44,13 +44,15 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: var(--surface);
+    background: var(--bg);
     border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
+    padding: 16px;
   }
+  /* One centred column: the header's contents and the feed share a width. */
+  header > *, main { max-width: 680px; margin-left: auto; margin-right: auto; }
   h1 {
-    margin: 0 0 12px;
-    font-size: 20px;
+    margin: 0 0 14px;
+    font-size: 23px;
     font-weight: 700;
     text-align: center;
   }
@@ -73,8 +75,8 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 8px;
-    padding: 9px 12px;
-    font-size: 14px;
+    padding: 11px 14px;
+    font-size: 15px;
   }
   /* iOS Safari zooms the page into any focused field whose text is under
      16px. Touch screens get 16px controls; desktop keeps the 14px look. */
@@ -86,53 +88,43 @@
   #q { flex: 1 1 100%; min-width: 0; }
   select { min-width: 140px; }
   main {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px 24px 60px;
+    padding: 4px 16px 60px;
   }
   .status {
     color: var(--text-muted);
     font-size: 13px;
-    margin-bottom: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+    margin-bottom: 4px;
   }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-  }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  /* One card: optional brand line, then name + attributes beside price +
+     size, then dispensary beside the date added. The right column is
+     content-sized so a long name wraps in the left column instead of
+     pushing the price around. */
   .card {
+    display: block;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-    display: flex;
-    flex-direction: column;
+    padding: 16px;
     text-decoration: none;
     color: inherit;
-    transition: transform 0.12s ease;
   }
-  .card:hover { transform: translateY(-2px); }
-  .card-body { padding: 14px 16px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-  .card-brand { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
-  .card-name { font-size: 17px; font-weight: 700; line-height: 1.25; margin-top: 2px; }
-  .card-detail { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
-  .card-added { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-  .tag {
-    font-size: 10px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-  }
-  /* Price top-right beside the name, dispensary bottom-right beside the
-     "Added" line, so the two columns of the card carry equal weight. */
-  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .card-price { font-size: 19px; font-weight: 700; color: var(--accent); white-space: nowrap; margin-top: 10px; }
-  .card-footer { margin-top: auto; padding-top: 4px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .card-dispensary { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .card-dispensary svg { flex: none; width: 13px; height: 13px; fill: currentColor; opacity: .8; }
+  .card:hover { border-color: var(--text-muted); }
+  .card-brand { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .card-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: start; }
+  .card-name { font-size: 18px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .card-attrs { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+  .card-right { text-align: right; }
+  .card-price { font-size: 22px; font-weight: 600; color: var(--accent); line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .card-price.sale { color: var(--sale); }
+  .card-was { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .card-size { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+  .card-footer { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 12px; font-size: 13px; color: var(--text-muted); }
+  .card-dispensary { display: flex; align-items: flex-start; gap: 5px; min-width: 0; }
+  .card-dispensary svg { flex: none; width: 13px; height: 13px; margin-top: 3px; fill: currentColor; opacity: .8; }
+  .card-added { white-space: nowrap; }
   .load-more {
     display: block;
     margin: 14px auto 0;
@@ -162,18 +154,21 @@
   }
   .btn-group .btn { justify-content: center; }
   .btn {
+    min-height: 44px;
     padding: 8px 14px;
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
-    font-size: 14px;
+    font-size: 15px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     white-space: nowrap;
   }
+  .btn:focus-visible, .card:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #sortLabel::after { content: " \25BE"; color: var(--text-muted); }   /* ▾ */
   .btn:hover { border-color: var(--accent); }
   .btn[aria-expanded="true"] { border-color: var(--accent); }
   .btn .pill {
@@ -186,7 +181,7 @@
     padding: 1px 6px;
     text-align: center;
   }
-  .btn .btn-value { color: var(--text-muted); }
+  .btn .btn-value { color: var(--text); }
   .backdrop {
     position: fixed;
     inset: 0;
@@ -344,13 +339,13 @@
 <header>
   <h1>Dutchie Product Search</h1>
   <div class="controls">
-    <input type="text" id="q" placeholder="Search products, brands, dispensaries...">
+    <input type="text" id="q" placeholder="Search products, brands, dispensaries…" aria-label="Search products, brands, dispensaries">
     <div class="btn-group">
       <button class="btn" id="filterBtn" aria-haspopup="dialog" aria-expanded="false">
         Filters<span class="pill" id="filterCount" hidden></span>
       </button>
-      <button class="btn" id="sortBtn" aria-haspopup="dialog" aria-expanded="false">
-        Sort<span class="btn-value" id="sortLabel">Newest first</span>
+      <button class="btn" id="sortBtn" aria-haspopup="dialog" aria-expanded="false" aria-label="Sort order">
+        <span class="btn-value" id="sortLabel">Newest first</span>
       </button>
     </div>
   </div>
@@ -480,28 +475,28 @@ function restockBadge(p) {
 }
 
 function cardHTML(p) {
-  // Category and weight only. Subcategory, strain type and THC are all still
-  // in the database and searchable — they're just not shown as tags, which
-  // were crowding the card.
-  // Title and descriptor come from the importer's split of the listing name
-  // (names.py); the type and size join the descriptor line.
-  const detail = [p.display_detail, p.product_type, p.weight_label].filter(Boolean).join(' · ');
+  // Attributes: the descriptor split off the listing name plus the type;
+  // the size sits under the price instead, so it appears once.
+  const attrs = [p.display_detail, p.product_type].filter(Boolean).join(' · ');
+  const price = applicablePrice(p.price, p.sale_price);
   return `
     <a class="card" href="#p=${p.id}" data-id="${p.id}">
-      <div class="card-body">
-        ${restockBadge(p)}
-        <div class="card-head">
-          <div>
-            ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
-            <div class="card-name">${escapeHtml(p.display_name || p.name)}</div>
-          </div>
-          <div class="card-price">$${p.price.toFixed(2)}</div>
+      ${restockBadge(p)}
+      ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
+      <div class="card-main">
+        <div class="card-name">${escapeHtml(p.display_name || p.name)}</div>
+        <div class="card-right">
+          ${price ? (price.sale
+              ? `<div class="card-price sale">${money(price.cents)}</div><div class="card-was">Sale · <s>${money(price.regular)}</s></div>`
+              : `<div class="card-price">${money(price.cents)}</div>`)
+            : `<div class="card-size">Price unavailable</div>`}
+          ${p.weight_label ? `<div class="card-size">${escapeHtml(p.weight_label)}</div>` : ''}
         </div>
-        ${detail ? `<div class="card-detail">${escapeHtml(detail)}</div>` : ''}
-        <div class="card-footer">
-          <div class="card-dispensary">${PIN}<span>${escapeHtml(p.dispensary_display)}</span></div>
-          ${p.created_at ? `<div class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</div>` : ''}
-        </div>
+        ${attrs ? `<div class="card-attrs">${escapeHtml(attrs)}</div>` : ''}
+      </div>
+      <div class="card-footer">
+        <span class="card-dispensary">${PIN}<span>${escapeHtml(p.dispensary_display)}</span></span>
+        ${p.created_at ? `<span class="card-added" title="${escapeAttr(p.created_at)}">Added ${formatDate(p.created_at)}</span>` : ''}
       </div>
     </a>`;
 }
@@ -515,8 +510,7 @@ function formatDate(isoString) {
   const days = Math.floor((now - d) / 86400000);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
-  if (days < 14) return `${days} days ago`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
 }
 
 function escapeHtml(s) {
@@ -541,8 +535,7 @@ async function runSearch(page = 1, append = false) {
   }
 
   const shown = (append ? grid.querySelectorAll('.card').length : data.results.length);
-  el('status').textContent = `${data.total.toLocaleString()} products found` +
-    (data.total ? ` - showing ${shown.toLocaleString()}` : '');
+  el('status').textContent = data.total ? `Showing ${shown.toLocaleString()} of ${data.total.toLocaleString()} products` : 'No products found';
 
   el('loadMore').hidden = shown >= data.total;
 }
@@ -664,8 +657,8 @@ runSearch(1, false);
 
 /* ---- Product modal: compact details, one price graph, one checkable list ---- */
 
-const cents = v => (v == null || v === '' || isNaN(Number(v))) ? null : Math.round(Number(v) * 100);
-const money = c => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function cents(v) { return (v == null || v === '' || isNaN(Number(v))) ? null : Math.round(Number(v) * 100); }
+function money(c) { return '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 /* Ticks are remembered per product being compared: same-product rows start
    ticked (`off` lists the exceptions), similar products start unticked
@@ -714,7 +707,7 @@ function applicablePrice(regular, sale) {
 function buildRows(d) {
   const p = d.product, g = d.group;
   const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, dispensary_display: p.dispensary_display,
-    price: p.price, sale_price: null, confidence: 1 }];
+    price: p.price, sale_price: p.sale_price, confidence: 1 }];
   const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.name,
     price: applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {

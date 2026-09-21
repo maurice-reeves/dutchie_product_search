@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # source CSV has ~170 columns (POS-integration-specific fields that vary per
 # dispensary) and can be 100MB+, so there's no reason to load the rest.
 USE_COLUMNS = [
-    "Name", "Image", "Prices", "brand_name", "type", "subcategory",
+    "Name", "Image", "Prices", "recSpecialPrices", "brand_name", "type", "subcategory",
     "strainType", "THCContent_range", "dispensary", "url",
     "cName", "scrapeDate", "createdAt",
     # Weight. The bare `weight` column is not usable: it reads 1000 for a 3.5g
@@ -138,6 +138,11 @@ def dutchie_products(csv_path: Path) -> pd.DataFrame:
 
     df["price"] = pd.to_numeric(df["Prices"], errors="coerce")
     df = df[df["price"].notna()]
+    # The menu's special price for the same (first) option, kept only when it
+    # really undercuts the regular price. It is the "applicable price" the
+    # cards and the popup show, and what the price sorts use.
+    df["sale_price"] = pd.to_numeric(df["recSpecialPrices"].apply(first_in_list), errors="coerce")
+    df.loc[~(df["sale_price"] < df["price"]), "sale_price"] = None
 
     df["created_at"] = pd.to_datetime(df["createdAt"], errors="coerce")
 
@@ -200,7 +205,7 @@ def dutchie_products(csv_path: Path) -> pd.DataFrame:
         "subcategory": "product_subcategory",
         "strainType": "strain_type",
     })[[
-        "product_id", "name", "image_url", "price", "brand_name", "product_type",
+        "product_id", "name", "image_url", "price", "sale_price", "brand_name", "product_type",
         "product_subcategory", "strain_type", "weight_label", "weight_mg", "thc_display",
         "dispensary_display", "dispensary_slug", "dispensary_url", "product_url",
         "product_slug", "scrape_date", "created_at", "updated_at",

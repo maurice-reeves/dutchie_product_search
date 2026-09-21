@@ -47,11 +47,21 @@ vireo_products*.csv    ─┘   one products table   products + FTS5            
 | `cName` + `dispensary` | `product_url`    | `https://dutchie.com/dispensary/<slug>/product/<cName>` — the singular `/product/` resolves, the plural `/products/` does not |
 | `id`                 | `product_id`       | Dutchie's product id; what lets a product be followed across daily snapshots |
 | `Prices`             | `price`            | coerced to a number; rows with no parseable price are dropped   |
+| `recSpecialPrices`   | `sale_price`       | the menu's special price for the same option, kept only when it undercuts `price`. Cards and the popup show it as the *applicable price* (regular price struck through beneath) and the price sorts order by `COALESCE(sale_price, price)`; Jane rows have none |
 | `createdAt`          | `created_at`       | parsed to a timestamp (drives "Newest first" + "Added" labels)  |
 | `type`               | `product_type`     | null → `Uncategorized`                                          |
 
 Rows without a `Name`, without an `Image`, or without a parseable price
 are excluded from the database.
+
+#### The feed
+
+One centred column of cards (680 px max): optional brand line, then the
+name and its attributes (`display_detail · product_type`) beside the
+applicable price with the package size directly under it, then the
+dispensary beside the "Added" date — *today*, *yesterday*, or a compact
+date, from the same `created_at` the "Newest first" sort uses. The results
+line reads "Showing 30 of 86,781 products".
 
 #### Card titles (`display_name`, `display_detail`)
 

@@ -78,7 +78,7 @@ Hybrid Huckleberry 100mg` — so the card shows a title and a descriptor that
 
 | Listing name | `display_name` | `display_detail` |
 | --- | --- | --- |
-| `Malek's \| 1g Live Resin Batter \| Juicy (H)` | Juicy (H) | Live resin batter |
+| `Malek's \| 1g Live Resin Batter \| Juicy (H)` | Juicy | Live resin batter |
 | `REC: Craft Sour Diesel 510 Cartridge Distillate` | Sour Diesel | REC · 510 cartridge distillate |
 | `Wyld Gummies Hybrid Huckleberry 100mg` | Huckleberry | Gummies hybrid |
 | `Black Maple #22 \| 500MG \| Rosin Cartridge` | Black Maple #22 | Rosin cartridge |
@@ -90,8 +90,10 @@ extra menu words in `names.DESCRIPTOR`) is the product; the rest is the
 descriptor, with the card adding the type and size after it. A
 single-segment name is split only when its unknown words sit together at
 one end; otherwise it is shown whole rather than scrambled, and the title
-is never empty. The listing name stays in `name` for search and for the
-popup's description line. `python names.py --backfill data/products.db`
+is never empty. Strain marks — `(H)`, `[I]`, `(S/I)`, a lone `H` segment,
+even a truncated `(I` — are dropped from the title: the card has no use
+for them and `strain_type` carries the fact. The listing name stays in
+`name` for search and for the popup's title. `python names.py --backfill data/products.db`
 adds the two columns to an existing database without touching row ids.
 
 ### Database schema (`data/products.db`)

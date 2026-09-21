@@ -1,7 +1,7 @@
 """Card titles: the strain or product name pulled out of a menu listing, and
 everything else the listing said folded into one descriptor line.
 
-    "Malek's | 1g Live Resin Batter | Juicy (H)"        -> "Juicy (H)",       "live resin batter"
+    "Malek's | 1g Live Resin Batter | Juicy (H)"        -> "Juicy",           "live resin batter"
     "REC: Craft Sour Diesel 510 Cartridge Distillate"   -> "Sour Diesel",     "REC · 510 cartridge distillate"
     "Wyld Gummies Hybrid Huckleberry 100mg"             -> "Huckleberry",     "gummies hybrid"
 
@@ -12,8 +12,10 @@ segments at | / - : and brackets, and the segment made up mostly of words
 the vocabulary does *not* know is the product; the rest is the descriptor.
 A single-segment name is split only when its unknown words sit together at
 one end ("Sour Diesel 510 Cartridge Distillate", "Gummies Hybrid Huckleberry");
-otherwise it is left whole rather than scrambled. The original listing name
-is kept in `name` for search and the popup's "Listed as" column.
+otherwise it is left whole rather than scrambled. Strain marks -- "(H)",
+"[I]", "(S/I)", a lone "H" segment, even a truncated "(I" -- are dropped:
+the card has no use for them and `strain_type` carries the fact. The
+original listing name is kept in `name` for search and the popup's title.
 
 import_products.py adds `display_name` and `display_detail` to every row;
 `python names.py --backfill data/products.db` adds them to an existing
@@ -43,7 +45,14 @@ drink drinks beverage beverages soda cola tea coffee capsule capsules tablet tab
 topical topicals cream creams balm balms lotion salve patch patches roll-on bath oil oils
 flower buds bud nug nugs shake trim indoor outdoor greenhouse sungrown organic
 sativa indica hybrid h s i sh ih si is hi hs""".split())
-STRAIN_MARK = re.compile(r"[(\[]\s*(h|i|s|s/h|h/s|i/h|h/i|ih|hi|sh|hs|is|si|hybrid|indica|sativa|cbd)\s*[)\]]", re.I)
+# "(H)", "[I]", "(S/H)", "(S,H,I)", "(IH)", "(Sativa)", and "(I" when the menu
+# cut the name off before the bracket closed. Three letters need separators:
+# "(ish)" and "Ish" are words.
+STRAIN_MARK = re.compile(r"[(\[]\s*(?:[his](?:\s*[/,]\s*[his]){0,2}|[his]{2}|hybrid|indica|sativa|cbd)\s*(?:[)\]]|$)", re.I)
+LONE_MARK = re.compile(r"(?i)[his](?:[/,][his]){0,2}|[his]{2}")
+# "(CBD/THC 4:1)", "(CBD | THC)", "(CBD:THC)": a cannabinoid ratio, which the
+# separator split would otherwise cut in half. It moves to the descriptor.
+RATIO_MARK = re.compile(r"\(\s*((?:cbd|thc|cbn|cbg|cbc)(?:\s*[/|:]\s*(?:cbd|thc|cbn|cbg|cbc))+[^)]*)\)", re.I)
 STRAIN_WORD = re.compile(r"^(sativa|indica|hybrid)$", re.I)
 BRACKET_SIZE = re.compile(r"\[[^\]]*\]|\((?=[^)]*\d)[^)]*(?:mg|g|oz|ml|pk|pack|ct|piece|count|x)\b[^)]*\)", re.I)
 REC_MED = re.compile(r"^\s*(rec|med|medical|recreational)\s*[:\-–—]\s*", re.I)
@@ -96,18 +105,16 @@ def split_name(name: str, brand: str = "") -> tuple[str, str]:
     pattern = _brand_pattern(brand)
     if pattern:
         text = pattern.sub(" ", text)
-    strain_marks = [f"({m.upper().replace(' ', '')})" for m in STRAIN_MARK.findall(text)]
+    ratios = [re.sub(r"\s+", " ", m.strip()) for m in RATIO_MARK.findall(text)]
+    text = RATIO_MARK.sub(" ", text)
     text = STRAIN_MARK.sub(" ", text)
     text = BRACKET_SIZE.sub(" ", text)
     text = SIZE_TOKENS.sub(" ", text)
     segments = [_clean(s) for s in SEPARATORS.split(text)]
     segments = [s for s in segments if s and _words(s)]
     # A segment that is only a strain letter ("Cake Mix - H - Infused Blunt")
-    # is a mark; a lone "Sativa" segment is a descriptor word.
-    lone = [s for s in segments if re.fullmatch(r"(?i)h|i|s|ih|hi|sh|hs", s)]
-    if lone and not strain_marks:
-        strain_marks.append(f"({lone[0].upper()})")
-    segments = [s for s in segments if s not in lone]
+    # is a mark too; a lone "Sativa" segment is a descriptor word.
+    segments = [s for s in segments if not LONE_MARK.fullmatch(s)]
 
     title, detail_parts = "", []
     if not segments:
@@ -143,10 +150,8 @@ def split_name(name: str, brand: str = "") -> tuple[str, str]:
     while tw and STRAIN_WORD.match(tw[-1]):
         detail_parts.append(tw.pop())
     title = " ".join(tw) or title
-    if strain_marks:
-        title = f"{title} {strain_marks[0]}"
     parts = [re.sub(r"(?i)^the\s+", "", _clean(p)) for p in detail_parts]
-    detail = " · ".join(tags + [_detail_case(p) for p in parts if p and _words(p) != ["the"]])
+    detail = " · ".join(tags + [_detail_case(p) for p in parts if p and _words(p) != ["the"]] + ratios)
     return _clean(title) or raw, detail
 
 

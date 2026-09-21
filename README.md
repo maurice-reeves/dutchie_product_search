@@ -532,7 +532,7 @@ names.py               listing name → card title + descriptor (used by the imp
 import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
 import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
-tests/                 pytest for the matching rules (/usr/local/bin/python3 -m pytest -q tests)
+tests/                 pytest: matching rules, importer, API (./.venv/bin/python -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
 dashboard/             private /dash status page: metrics, visitors, auth
 start_search.command   double-click launcher: server + Cloudflare tunnel

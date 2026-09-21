@@ -31,6 +31,15 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
+def applicable_price_sql(conn: sqlite3.Connection) -> str:
+    """Use the displayed positive discount; tolerate databases not yet reimported."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(products)")}
+    if "sale_price" not in columns:
+        return "products.price"
+    return ("CASE WHEN products.sale_price > 0 AND products.sale_price < products.price "
+            "THEN products.sale_price ELSE products.price END")
+
+
 @app.get("/api/meta")
 def meta():
     conn = get_conn()
@@ -154,8 +163,9 @@ def filters(
             )
         price_where, price_params = facet_conditions(selections, q=q)
         clause = f"WHERE {' AND '.join(price_where)}" if price_where else ""
+        price_sql = applicable_price_sql(conn)
         price_row = conn.execute(
-            f"SELECT MIN(price), MAX(price) FROM products {clause}", price_params
+            f"SELECT MIN({price_sql}), MAX({price_sql}) FROM products {clause}", price_params
         ).fetchone()
         out["min_price"], out["max_price"] = price_row[0], price_row[1]
         return out
@@ -220,6 +230,7 @@ def search(
 ):
     conn = get_conn()
     try:
+        price_sql = applicable_price_sql(conn)
         where = []
         params: list = []
 
@@ -248,10 +259,10 @@ def search(
                 where.append(f"{column} IN ({','.join('?' * len(chosen))})")
                 params.extend(chosen)
         if min_price is not None:
-            where.append("products.price >= ?")
+            where.append(f"({price_sql}) >= ?")
             params.append(min_price)
         if max_price is not None:
-            where.append("products.price <= ?")
+            where.append(f"({price_sql}) <= ?")
             params.append(max_price)
 
         where_clause = f"WHERE {' AND '.join(where)}" if where else ""
@@ -260,8 +271,8 @@ def search(
             "relevance": "products.id" if not match else "rank",
             # Sort by the applicable price -- the sale price when there is one --
             # so the order matches the number shown on the card.
-            "price_asc": "COALESCE(products.sale_price, products.price) ASC",
-            "price_desc": "COALESCE(products.sale_price, products.price) DESC",
+            "price_asc": f"{price_sql} ASC, products.id",
+            "price_desc": f"{price_sql} DESC, products.id",
             "name_asc": "products.name ASC",
             "newest": "products.created_at DESC",
         }[sort]
@@ -347,7 +358,8 @@ def product_detail(product_row: int):
                 JOIN products p ON p.id = g.product_row
                 JOIN product_prices pp ON pp.product_row = p.id AND pp.size_key = ?
                 WHERE g.group_id = ?
-                ORDER BY pp.price""", (size_key, grp["group_id"])).fetchall()
+                ORDER BY CASE WHEN pp.sale_price > 0 AND pp.sale_price < pp.price
+                              THEN pp.sale_price ELSE pp.price END, p.id""", (size_key, grp["group_id"])).fetchall()
             offers, seen = [], set()
             for r in rows:                              # first row per store is that store's lowest price
                 if r["dispensary_slug"] in seen:
@@ -368,7 +380,9 @@ def product_detail(product_row: int):
                    pp.price AS price_at_size, pp.sale_price AS sale_at_size, pp.size_label AS size_label_at_size
             FROM similar_products s JOIN products p ON p.id = s.similar_row
             LEFT JOIN product_prices pp ON pp.product_row = p.id AND pp.size_key = ?
-            WHERE s.product_row = ? ORDER BY s.rank, pp.price""", (size_key, product_row)):
+            WHERE s.product_row = ? ORDER BY s.rank,
+                CASE WHEN pp.sale_price > 0 AND pp.sale_price < pp.price
+                     THEN pp.sale_price ELSE pp.price END""", (size_key, product_row)):
             if r["id"] not in seen:                     # a size can carry two labels; keep the cheaper row
                 seen.add(r["id"])
                 similar.append(dict(r))

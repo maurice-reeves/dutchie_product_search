@@ -10,3 +10,6 @@ __pycache__/
 data/visitors.json
 data/products_dev.db
 data/
+
+# R console history
+.Rhistory

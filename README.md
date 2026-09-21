@@ -6,9 +6,9 @@ database with full-text search, then serves a small web UI to search and
 filter products by name, brand, dispensary, type, weight and price —
 linking each card straight to that product on the dispensary's own menu.
 
-It also tracks **what came back on the shelf**: each import snapshots every
-product and diffs against the previous day, so restocked, repackaged and
-newly listed items are flagged on the cards.
+Clicking a card opens a price-comparison popup (same product at other
+stores, plus similar listings). Restock badges exist but are **off** by
+default — see [Restock tracking](#restock-tracking-off-by-default).
 
 This project is **standalone**. It only reads a CSV that `dutchie_scraper`
 already produced; it does not import or depend on that package.
@@ -61,8 +61,9 @@ One centred column of cards (680 px max): optional brand line, then the
 name and its attributes (`display_detail · product_type`) beside the
 applicable price with the package size directly under it, then the
 dispensary beside the "Added" date — *today*, *yesterday*, or a compact
-date, from the same `created_at` the "Newest first" sort uses. The results
-line reads "Showing 30 of 86,781 products".
+date, from the same `created_at` the "Newest first" sort uses. Default
+sort is newest; 30 cards per page. The results line reads
+"Showing 30 of 86,781 products".
 
 #### Card titles (`display_name`, `display_detail`)
 
@@ -86,7 +87,7 @@ descriptor, with the card adding the type and size after it. A
 single-segment name is split only when its unknown words sit together at
 one end; otherwise it is shown whole rather than scrambled, and the title
 is never empty. The listing name stays in `name` for search and for the
-popup's "Listed as" column. `python names.py --backfill data/products.db`
+popup's description line. `python names.py --backfill data/products.db`
 adds the two columns to an existing database without touching row ids.
 
 ### Database schema (`data/products.db`)
@@ -96,14 +97,19 @@ adds the two columns to an existing database without touching row ids.
   Indexed on `price`, `product_type`, `dispensary_display`, `created_at`.
 - **`products_fts`** — an FTS5 virtual table over `name`, `brand_name`,
   and `dispensary_display`, contentless (mirrors `products` by rowid).
-  Powers the free-text search box with prefix matching on each word (AND).
+  The search box is tokenised into prefix terms AND-ed together
+  (`wyld gummies` → `"wyld"* AND "gummies"*`). Quotes in the box are
+  stripped so they cannot break `MATCH`; punctuation-only input is treated
+  as an empty query.
 - **`import_meta`** — a single row: `source_csv` (both CSVs), `row_count`,
   `imported_at`. Shown under the page title as "Refreshed …".
 - **`first_seen`** — `(product_id, dispensary_slug) → first_seen`, the date
-  a product first turned up in a scrape; never overwritten, survives
-  `products` being replaced. Jane gives no creation date, so Jane rows get
-  their `created_at` (the card's "Added" line, the "Newest first" sort) from
-  here; Dutchie rows keep Dutchie's own `createdAt`.
+  a product first turned up in a scrape; never overwritten. The nightly
+  import copies the live database to a staging file before rewriting
+  `products`, so this table (and snapshots) survive the rebuild. Jane
+  gives no creation date, so Jane rows get their `created_at` (the card's
+  "Added" line, the "Newest first" sort) from here; Dutchie rows keep
+  Dutchie's own `createdAt`.
 - **`product_prices`, `product_groups`, `group_prices`, `similar_products`**
   — the product popup's tables, written by `build_similarity.py`
   ([below](#product-popup-same-product-elsewhere-similar-products)).
@@ -354,12 +360,13 @@ Networks → Tunnels) and remove the two CNAMEs.
 
 ## Product popup: same product elsewhere, similar products
 
-Clicking a card opens a modal: a compact header (brand, full name,
-one attributes line), the listing's own price — the sale price when the
-menu shows one, regular price struck through beneath — a "View dispensary"
-button, then **one price comparison**: a horizontal graph and a checkable
-list of the same product at other dispensaries (ticked by default) and the
-nearest similar products (unticked), all at the size being compared. Each
+Clicking a card opens a modal — **no product photo**, just a compact
+header (brand, full name, one attributes line), the listing's own price —
+the sale price when the menu shows one, regular price struck through
+beneath — a "View dispensary" button, then **one price comparison**: a
+horizontal graph and a checkable list of the same product at other
+dispensaries (ticked by default) and the nearest similar products
+(unticked), all at the size being compared. Each
 row shows its *applicable* price — an unconditional sale price if the menu
 has one, else the regular price — and that same number is what the graph
 and the Min / Average / Max summary use, so the two can never disagree.
@@ -415,8 +422,8 @@ scraper job's log when it runs on the schedule.
 
 `GET /api/products/{id}/detail` returns the product, its sizes, the offers at
 the viewed size (one per store, with `confidence` and `is_this`) and the
-similar list. On a database without the tables (production, until the
-builder runs there) it returns the product alone and the popup degrades.
+similar list. If the four tables are missing (rebuild skipped or failed)
+it returns the product alone and the popup degrades.
 
 ### How "same product" is decided
 
@@ -444,7 +451,8 @@ sample of cross-store pairs). In order:
 
 Matching is deliberately not the last word: every row has a checkbox,
 the choices are remembered per product in `localStorage` (key
-`cmp:<group>:<size>`: same-product rows unticked, similar rows ticked), and
+`cmp:<group>:<size>`: same-product ids in `off` were unticked, similar
+ids in `on` were ticked), and
 low-confidence offers are labelled. The modal traps keyboard focus, closes
 on Escape and returns focus to the card that opened it; the summary is an
 `aria-live` region and the graph carries a text description of its values.
@@ -497,21 +505,22 @@ labels that are not weights (`single`, `5pack`) sort last.
 
 | Param          | Type   | Default       | Notes                                                            |
 | -------------- | ------ | ------------- | -------------------------------------------------------------- |
-| `q`            | string | `""`          | free text over name / brand / dispensary; each word is an FTS5 prefix term, AND-ed. Quotes in the box are stripped so they cannot break `MATCH`. |
+| `q`            | string | `""`          | free text over name / brand / dispensary. Tokenised into FTS5 prefix terms AND-ed (`wyld gummies` → `"wyld"* AND "gummies"*`). Quotes stripped; punctuation-only `q` is ignored. Same tokeniser is used by `/api/filters`. |
 | `product_type` | string[] | —           | repeatable; values OR together                                 |
 | `dispensary`   | string[] | —           | repeatable; values OR together                                 |
 | `brand`        | string[] | —           | repeatable; values OR together                                 |
 | `weight`       | string[] | —           | repeatable; matches `weight_label`                             |
-| `min_price`    | float  | —             | `price >= min_price`                                           |
-| `max_price`    | float  | —             | `price <= max_price`                                           |
-| `sort`         | enum   | `relevance`   | `relevance` \| `price_asc` \| `price_desc` \| `name_asc` \| `newest` |
+| `min_price`    | float  | —             | filters on the regular `price` column (`price >= min_price`)   |
+| `max_price`    | float  | —             | filters on the regular `price` column (`price <= max_price`)   |
+| `sort`         | enum   | `relevance`   | `relevance` \| `price_asc` \| `price_desc` \| `name_asc` \| `newest`. Price sorts use `COALESCE(sale_price, price)` so the order matches the number on the card. The UI defaults to `newest`. |
 | `page`         | int    | `1`           | 1-based                                                        |
-| `page_size`    | int    | `24`          | 1–100                                                          |
+| `page_size`    | int    | `24`          | 1–100. The UI requests 30.                                     |
 
 Filters are multi-select: values OR within a filter and AND across filters,
 so "Flower or Edible" at "Wyld or PAX" reads the way you would expect.
 Results are tagged with `restock_reason` (and, for `quantity_up`, the
-quantity pair) when the product changed in the latest scrape.
+quantity pair) when a `restock_events` table exists — it does not, while
+tracking is off.
 
 `relevance` uses the FTS5 `rank` only when `q` is non-empty; otherwise it
 falls back to `id` order. Response:
@@ -520,6 +529,20 @@ falls back to `id` order. Response:
 { "results": [ { "id": 1, "name": "...", "image_url": "...", "price": 42.0, ... } ],
   "total": 1234, "page": 1, "page_size": 24 }
 ```
+
+### `GET /api/products/{id}/detail`
+
+Everything the popup needs in one round-trip. `{id}` is the integer row
+id on `products`, not the source `product_id`.
+
+```json
+{ "product": { ... }, "sizes": [...], "group": { "group_id", "confidence", "method", "size_key", "size_label", "n_stores" },
+  "offers": [ { "id", "dispensary_display", "price", "sale_price", "confidence", "is_this", ... } ],
+  "similar": [ { "id", "score", "price_at_size", "sale_at_size", ... } ] }
+```
+
+Unknown id → `404 {"error": "not found"}`. Missing popup tables → the
+product with empty `offers` / `similar` and `group: null`.
 
 ---
 
@@ -532,7 +555,7 @@ names.py               listing name → card title + descriptor (used by the imp
 import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
 import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
-tests/                 pytest: matching rules, importer, API (./.venv/bin/python -m pytest -q tests)
+tests/                 pytest: matching, names, atomic import, search API (./.venv/bin/python -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
 dashboard/             private /dash status page: metrics, visitors, auth
 start_search.command   double-click launcher: server + Cloudflare tunnel
@@ -552,8 +575,15 @@ logs/                  uvicorn.log, cloudflared.log; git-ignored
   tunnel may still be connecting, or `cloudflared` is not installed.
 - **Port 8000 already in use** — a hand-started `uvicorn` is fighting the
   agent; `pkill -f "uvicorn app:app"` and let launchd bring its own back.
-- **No restock badges** — restock detection needs two snapshots. Run
-  `backfill_snapshots.py` to seed history from CSVs already on disk.
+- **No restock badges** — tracking is off. `RESTOCK_TRACKING=1` on the
+  import turns it back on; then run `backfill_snapshots.py` so the first
+  live day has something to compare against.
+- **Search 500s on a typed quote** — old; `fts_match_query` strips quotes.
+  Restart the web agent after pulling `app.py`.
+- **Popup empty after a scrape** — the similarity rebuild failed or was
+  skipped (`--no-similarity` / `SIMILARITY_PYTHON=`). Products still
+  published; the next successful rebuild fills the popup. Check the
+  scraper job log.
 - **milehighdispos.com is down but `127.0.0.1:8000` works** — the tunnel
   agent: `tail logs/tunnel.log`, then
   `launchctl kickstart -k gui/$(id -u)/com.mauricereeves.milehighdispos-tunnel`.
@@ -561,4 +591,3 @@ logs/                  uvicorn.log, cloudflared.log; git-ignored
   tunnel is connected.
 - **Both are down after a reboot** — the agents run in the logged-in user
   session; log in once and they start.
-```

@@ -237,8 +237,10 @@ def search(
 
         order = {
             "relevance": "products.id" if not q.strip() else "rank",
-            "price_asc": "products.price ASC",
-            "price_desc": "products.price DESC",
+            # Sort by the applicable price -- the sale price when there is one --
+            # so the order matches the number shown on the card.
+            "price_asc": "COALESCE(products.sale_price, products.price) ASC",
+            "price_desc": "COALESCE(products.sale_price, products.price) DESC",
             "name_asc": "products.name ASC",
             "newest": "products.created_at DESC",
         }[sort]

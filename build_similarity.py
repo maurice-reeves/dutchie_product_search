@@ -67,10 +67,28 @@ indica sativa hybrid cbd thc cbn cbg cbc h s i ih sh fs full spectrum solventles
 oz g mg x plus of w papers paper cones cone wraps wrap king size mini classic original organic hemp glass pipe battery kit starter
 edible edibles extract concentrate topical cream balm patch capsule tablet dose dosed each ct pk""".split())
 BATCH = re.compile(r"#\s?\d+\w*")
+# The fuzzy tier's (cosine, name-overlap) floors: the original band, and a
+# second one for listings whose embeddings agree so strongly that a lower
+# name overlap (ratios written differently, a dropped descriptor) is enough.
+FUZZY = ((0.92, 0.8), (0.93, 0.6))
 # Product format words. A cartridge and an all-in-one of the same strain are
 # different SKUs at different prices; so are a starter kit and a disposable.
 FORMATS = {"cart": "cart", "carts": "cart", "cartridge": "cart", "cartridges": "cart", "pod": "pod", "pods": "pod",
            "aio": "aio", "disposable": "aio", "disposables": "aio", "kit": "kit", "pack": "pack", "packs": "pack"}
+
+
+# Concentrate textures. jac() ignores these words (they are GENERIC), which
+# let "Live Resin X" merge with "Live Sugar X": same strain, different
+# product. Each listing's set of texture words is compared like the format;
+# disjoint sets veto, overlapping or empty ones do not.
+TEXTURES = {"resin": "resin", "rosin": "rosin", "sugar": "sugar", "badder": "badder", "batter": "badder", "budder": "budder",
+            "shatter": "shatter", "wax": "wax", "crumble": "crumble", "sauce": "sauce", "diamonds": "diamonds",
+            "distillate": "distillate", "hash": "hash", "kief": "kief", "bubble": "hash", "temple": "hash"}
+
+
+def textures_of(name) -> frozenset:
+    toks = re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).split()
+    return frozenset(TEXTURES[t] for t in toks if t in TEXTURES)
 
 
 def format_of(name):
@@ -275,23 +293,39 @@ class Groups:
     """Union-find with group-level vetoes.
 
     A merge is refused if the two groups already contain the same dispensary
-    (a store never lists one SKU twice), different strains, different formats,
-    or different stated pack counts. Checking at the group level is what stops chains: A and C may
-    each be compatible with an unmarked B while conflicting with each other.
+    with *different* listings (a store carrying two variants side by side),
+    different strains, different formats, different stated pack counts or
+    different concentrate textures. Checking at the group level is what
+    stops chains: A and C may each be compatible with an unmarked B while
+    conflicting with each other.
+
+    The store check is duplicate-aware: menus list one SKU twice all the
+    time (a med and a rec entry, a re-listed item), under the same name. Two
+    groups that share a store are still allowed to merge when, at every
+    shared store, they hold a listing with the same name -- that overlap is a
+    duplicate, not a variant. Without this the second listing seeded its own
+    group and the product's stores were split between the two.
     """
 
-    def __init__(self, stores: pd.Series, strains, formats, packs=None):
+    def __init__(self, stores: pd.Series, strains, formats, packs=None, textures=None, names=None):
         self.parent = np.arange(len(stores))
         self.stores = [{s} for s in stores]
+        # per group: store -> the listing names it holds there
+        self.names = [{s: {n}} for s, n in zip(stores, names if names is not None else [""] * len(stores))]
         self.strains = [{x} if x else set() for x in strains]
         self.formats = [{x} if x else set() for x in formats]
         self.packs = [{x} if x else set() for x in (packs if packs is not None else [None] * len(stores))]
+        self.textures = [set(x) for x in (textures if textures is not None else [()] * len(stores))]
         self.method: dict[int, tuple[str, float]] = {}
         self.refused = 0
 
     @staticmethod
     def _clash(attr, ra, rb) -> bool:
         return bool(attr[ra]) and bool(attr[rb]) and attr[ra].isdisjoint(attr[rb])
+
+    def _store_clash(self, ra, rb) -> bool:
+        """Shared stores are fine only where both sides list the same name there."""
+        return any(self.names[ra][s].isdisjoint(self.names[rb][s]) for s in self.stores[ra] & self.stores[rb])
 
     def find(self, x: int) -> int:
         while self.parent[x] != x:
@@ -303,17 +337,20 @@ class Groups:
         ra, rb = self.find(a), self.find(b)
         if ra == rb:
             return True
-        if (self.stores[ra] & self.stores[rb]) or self._clash(self.strains, ra, rb) or self._clash(self.formats, ra, rb) \
-                or self._clash(self.packs, ra, rb):
+        if self._store_clash(ra, rb) or self._clash(self.strains, ra, rb) or self._clash(self.formats, ra, rb) \
+                or self._clash(self.packs, ra, rb) or self._clash(self.textures, ra, rb):
             self.refused += 1
             return False
         if len(self.stores[ra]) < len(self.stores[rb]):
             ra, rb = rb, ra
         self.parent[rb] = ra
         self.stores[ra] |= self.stores[rb]
+        for store, held in self.names[rb].items():
+            self.names[ra].setdefault(store, set()).update(held)
         self.strains[ra] |= self.strains[rb]
         self.formats[ra] |= self.formats[rb]
         self.packs[ra] |= self.packs[rb]
+        self.textures[ra] |= self.textures[rb]
         for x in (a, b):
             if x not in self.method or self.method[x][1] > conf:
                 self.method[x] = (how, conf)
@@ -330,8 +367,11 @@ def build_groups(df: pd.DataFrame, E: np.ndarray, I: np.ndarray, D: np.ndarray, 
     # 10-pack must never merge with a stated 20-pack.
     df["block"] = df.bn + "|" + df.product_type.fillna("") + "|" + df.skey
     df["pack"] = df["name"].map(pack_count)
-    df["strain"] = df["name"].map(strain_of)
-    df["format"] = df["name"].map(format_of)
+    # Built as object columns on purpose: under pandas 3 a str column turns
+    # None into NaN, and NaN != NaN would make every missing strain a conflict.
+    df["strain"] = pd.Series([strain_of(n) for n in df["name"]], index=df.index, dtype=object)
+    df["format"] = pd.Series([format_of(n) for n in df["name"]], index=df.index, dtype=object)
+    df["texture"] = [textures_of(n) for n in df["name"]]
     lib = None
     if dutchie_csv is not None:
         lib = pd.read_csv(dutchie_csv, usecols=["id", "libraryProductId"], low_memory=False).drop_duplicates("id")
@@ -354,13 +394,27 @@ def build_groups(df: pd.DataFrame, E: np.ndarray, I: np.ndarray, D: np.ndarray, 
     def conflict(i, j):
         return strain[i] is not None and strain[j] is not None and strain[i] != strain[j]
 
-    g = Groups(df.dispensary_display, df["strain"], df["format"], df["pack"])
-    stats = {"exact_jane": 0, "name": 0, "library+name": 0, "fuzzy": 0}
+    # The listing name as written, for the duplicate-aware store check: two
+    # entries at one store are the same SKU only if they say the same thing
+    # (the size-stripped key would call a 1000mg and a 2000mg the same).
+    df["listing"] = df["name"].fillna("").str.lower().str.replace(r"\s+", " ", regex=True).str.strip()
+    g = Groups(df.dispensary_display, df["strain"], df["format"], df["pack"], df["texture"], df["listing"])
+    stats = {"duplicate": 0, "exact_jane": 0, "name": 0, "library+name": 0, "fuzzy": 0}
+    df["dkey"] = np.where((df.bn != "") & (df.nn != ""), df.block + "|" + df.nn, None)
+    # Tier 0: a store's duplicate entries of one listing are one product.
+    # Menus do this constantly (a med and a rec entry, a re-listed SKU).
+    # Merged first, the second entry never seeds a group of its own that
+    # the store check would then keep apart from the product's real group
+    # -- measured before this tier, 1,370 exact keys were spread over 2+
+    # groups, 8.5k products.
+    for _, rows in df[df.dkey.notna()].groupby(["dkey", "listing", "dispensary_display"]).groups.items():
+        rows = list(rows)
+        for j in rows[1:]:
+            stats["duplicate"] += g.union(rows[0], j, "duplicate", 1.0)
     for _, rows in df[df.platform == "jane"].groupby("product_id").groups.items():
         rows = list(rows)
         for j in rows[1:]:
             stats["exact_jane"] += g.union(rows[0], j, "exact_jane", 1.0)
-    df["dkey"] = np.where((df.bn != "") & (df.nn != ""), df.block + "|" + df.nn, None)
     for _, rows in df[df.dkey.notna()].groupby("dkey").groups.items():
         rows = list(rows)
         for j in rows[1:]:
@@ -377,7 +431,8 @@ def build_groups(df: pd.DataFrame, E: np.ndarray, I: np.ndarray, D: np.ndarray, 
         for j, s in zip(I[i][1:], D[i][1:]):
             if j <= i or blocks[j] != blocks[i] or g.find(i) == g.find(j) or conflict(i, j):
                 continue
-            if s >= 0.92 and jac(i, j) >= 0.8:
+            jj = jac(i, j)
+            if (s >= FUZZY[0][0] and jj >= FUZZY[0][1]) or (s >= FUZZY[1][0] and jj >= FUZZY[1][1]):
                 stats["fuzzy"] += g.union(i, j, "fuzzy", float(s))
     stats["refused_same_store"] = g.refused
     roots = np.array([g.find(i) for i in range(len(df))])

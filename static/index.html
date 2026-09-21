@@ -299,7 +299,6 @@
   .product .cstore .sub { display: block; font-size: 13px; color: var(--text-muted); }
   .product .visit { display: block; text-align: center; margin-top: 14px; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 15px; font-weight: 600; text-decoration: none; }
   .product .divider { border: 0; border-top: 1px solid var(--border); margin: 22px 0 18px; }
-  .product .ctx { font-size: 14px; color: var(--text-muted); margin-bottom: 2px; }
   .product h3 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
   .product .caption { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
   .product .empty-note, .product .loading { padding: 24px 20px; color: var(--text-muted); text-align: center; }
@@ -801,7 +800,6 @@ function renderProduct() {
       <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>
     </div>
     <hr class="divider">
-    <div class="ctx">${escapeHtml([p.brand_name, p.display_name || p.name, d.group ? sizeText(d.group) : p.weight_label].filter(Boolean).join(' · '))}</div>
     <h3>Compare prices</h3>
     <div aria-live="polite"><div class="caption" id="cmpCaption"></div></div>
     <div class="graph" id="cmpGraph" role="img"></div>

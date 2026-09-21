@@ -370,8 +370,9 @@ the sale price when the menu shows one, regular price struck through
 beneath — a "View dispensary" button, then **one price comparison**: a
 horizontal graph and a checkable list of the same product at other
 dispensaries (ticked by default) and the nearest similar products
-(unticked, each labelled with its brand so a same-named product from
-another maker is not mistaken for a match), all at the size being compared. Each
+(unticked), all at the size being compared. Every row leads with its
+brand, so a same-named product from another maker is not mistaken for a
+match. Each
 row shows its *applicable* price — a positive listed sale price below regular price if the menu
 has one, else the regular price — and that same number is what the graph
 and the Min / Average / Max summary use, so the displayed values can be reconciled directly.

@@ -729,15 +729,17 @@ function buildRows(d) {
   const p = d.product, g = d.group;
   const same = d.offers.slice();
   if (!same.some(o => o.id === p.id)) same.push({ ...p, is_this: true, confidence: 1 });
-  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.display_name || o.name,
+  // Every row leads with its brand: a grouped or similar "Pineapple" is only
+  // worth comparing if it is the same maker's Pineapple, and the name
+  // alone can't tell you that.
+  const describe = x => [x.brand_name, x.display_name || x.name].filter(Boolean).join(' · ');
+  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: describe(o),
     price: o.id === p.id && Object.hasOwn(p, 'sale_price') ? applicablePrice(p.price, p.sale_price) : applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {
     if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
     const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
     rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
-      // Brand first: another store's "Pineapple" is only comparable if it is
-      // the same maker's Pineapple, and the name alone can't tell you that.
-      desc: [s.brand_name, s.display_name || s.name].filter(Boolean).join(' · '), price, checked: price != null && productChoices.on.has(s.id) });
+      desc: describe(s), price, checked: price != null && productChoices.on.has(s.id) });
   }
   // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
   return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));

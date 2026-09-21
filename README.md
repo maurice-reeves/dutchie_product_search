@@ -375,12 +375,14 @@ brand, so a same-named product from another maker is not mistaken for a
 match. Each
 row shows its *applicable* price — a positive listed sale price below regular price if the menu
 has one, else the regular price — and that same number is what the graph
-and the Min / Average / Max summary use, so the displayed values can be reconciled directly.
+and its Min / Avg / Max labels use, so the displayed values can be reconciled directly.
 The source does not include sale-eligibility conditions; listed specials are
 not inferred to be member or first-time-buyer deals. Zero and negative
 specials are treated as missing, not free products.
 Ticking or unticking a row recomputes everything; the row order never
-changes. The graph marks the selected range (a dot at each end), the average (dashed) and
+changes. The graph marks the selected range (a dot at each end, labelled
+with the Min and Max values, sharing one label when they are close), the
+average (dashed, labelled) and
 this listing (emerald triangle, shown even when unticked, extending the
 scale if it sits outside the selected range). A similar product not sold
 in the compared size shows "Price unavailable" and cannot be ticked. The
@@ -463,8 +465,9 @@ the choices are remembered per product in `localStorage` (key
 `cmp:<group>:<size>`: same-product ids in `off` were unticked, similar
 ids in `on` were ticked), and
 low-confidence offers are labelled. The modal traps keyboard focus, closes
-on Escape and returns focus to the card that opened it; the summary is an
-`aria-live` region and the graph carries a text description of its values.
+on Escape and returns focus to the card that opened it; a visually hidden
+`aria-live` region announces the Min / Avg / Max values on every tick and
+the graph carries a text description of its values.
 
 ## Status dashboard (`/dash`)
 

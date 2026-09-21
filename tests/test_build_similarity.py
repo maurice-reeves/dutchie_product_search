@@ -42,6 +42,17 @@ def test_format_words(name, fmt):
     assert bs.format_of(name) == fmt
 
 
+def test_format_prefers_the_subcategory_over_the_typed_name():
+    """Green Valley: one name, two products. The POS category tells them apart."""
+    name = "Batch - Cartridge - Platinum Kush (I) 2000mg"
+    assert bs.format_of(name, "cartridges") == "cart"
+    assert bs.format_of(name, "disposables") == "aio"
+    assert bs.format_of(name, "live-rosin-cartridge") == "cart"
+    assert bs.format_of(name, "rosin-all-in-one") == "aio"
+    assert bs.format_of(name, "live-resin") == "cart"          # subcategory says nothing about form: the name decides
+    assert bs.format_of("Blue Dream", "") is None
+
+
 def test_size_key_uses_dose_for_edibles_and_canonical_mg_otherwise():
     # Dutchie: 100 mg drink with a 1000 mg net weight; Jane: same drink with dose only
     assert bs.size_key("Edible", 1000.0, "100mg", "100mg", "Pineapple Papaya Drink 100mg") == "100mgTHC"

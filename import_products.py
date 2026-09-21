@@ -16,8 +16,11 @@ The scheduled job runs this once both scrapes have finished. What it does:
    "Same store" is the same brand plus the same location words (TGS Wewatta
    vs "The Green Solution - Wewatta"); every drop is printed, and a Vireo
    store with no Jane counterpart is kept.
-3. Writes products, its FTS index and import_meta; drops the popup's tables
-   (their row ids just changed) and rebuilds them with build_similarity.py.
+3. Writes products, its FTS index and import_meta on a *staging* copy of the
+   live database (so first_seen / snapshots survive and the public site keeps
+   serving the old file), drops the popup's tables (their row ids just
+   changed), rebuilds them with build_similarity.py, then atomically replaces
+   the live file.
 4. Records when each (product, store) was first seen and uses that as
    created_at where the source has no date (Jane), so the card's "Added"
    date works for every store.
@@ -180,12 +183,67 @@ def record_first_seen(conn: sqlite3.Connection, seen_on: str) -> int:
     return new
 
 
-def write_database(out: pd.DataFrame, sources: list[Path]) -> list[str]:
+def _sidecars(path: Path):
+    for suffix in ("-wal", "-shm", "-journal"):
+        yield Path(str(path) + suffix)
+
+
+def unlink_sidecars(path: Path) -> None:
+    """SQLite names WAL/SHM/journal files after the db path. Leftovers from a
+    previous inode at that path would attach to a newly published file."""
+    for sidecar in _sidecars(path):
+        sidecar.unlink(missing_ok=True)
+
+
+def staging_path(live: Path) -> Path:
+    return live.with_name(live.name + ".staging")
+
+
+def prepare_staging(live: Path) -> Path:
+    """A private copy of the live database to build into.
+
+    first_seen and product_snapshots have to survive a products rebuild, so
+    the staging file starts as a consistent snapshot of live (sqlite backup,
+    which is safe while the site is reading). No live file means a fresh
+    staging path and write_database creates it.
+    """
+    staging = staging_path(live)
+    staging.unlink(missing_ok=True)
+    unlink_sidecars(staging)
+    if live.exists() and live.stat().st_size > 0:
+        # as_uri percent-encodes spaces (the parent folder is Personal Projects).
+        src = sqlite3.connect(live.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            dst = sqlite3.connect(staging)
+            src.backup(dst)
+            dst.close()
+        finally:
+            src.close()
+    return staging
+
+
+def publish_database(staging: Path, live: Path) -> None:
+    """Atomically put staging at live.
+
+    os.replace keeps connections that already opened the old inode on the
+    previous catalogue; app.py opens the path per request, so the next hit
+    sees the new file. Sidecars are named after the live path and would
+    attach to the new inode, so they go.
+    """
+    live.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(staging, live)
+    unlink_sidecars(live)
+    unlink_sidecars(staging)
+
+
+def write_database(out: pd.DataFrame, sources: list[Path], dest: Path | None = None) -> list[str]:
     """Replace the products table and everything derived from it. Returns the
-    lines to print."""
+    lines to print. `dest` is the file to write (the nightly job passes a
+    staging copy so the live file stays intact until publish_database)."""
+    dest = dest or DB_PATH
     lines = []
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(dest)
     try:
         out.to_sql("products", conn, if_exists="replace", index=True, index_label="id")
         drop_similarity_tables(conn)
@@ -241,20 +299,22 @@ def similarity_python() -> str | None:
     return None
 
 
-def refresh_similarity(dutchie_csv: Path, vireo_csv: Path | None) -> bool:
+def refresh_similarity(dutchie_csv: Path, vireo_csv: Path | None, db: Path | None = None) -> bool:
     """Rebuild the popup's tables for the database just written (10-20 min).
 
     Never fails the import: the products are already on disk, and without
     these tables the popup simply shows the product alone. Returns whether
-    the tables were rebuilt.
+    the tables were rebuilt. `db` is the file to write (staging, during the
+    nightly job) so the live site is untouched until publish_database.
     """
+    dest = db or DB_PATH
     python = similarity_python()
     if python is None:
         print("Similarity tables not refreshed: no interpreter with faiss + sentence-transformers "
               "(set SIMILARITY_PYTHON; SIMILARITY_PYTHON= skips this quietly)")
         return False
     cmd = [python, str(PROJECT_ROOT / "build_similarity.py"), "all",
-           "--db", str(DB_PATH), "--dutchie-csv", str(dutchie_csv)]
+           "--db", str(dest), "--dutchie-csv", str(dutchie_csv)]
     if vireo_csv is not None:
         cmd += ["--vireo-csv", str(vireo_csv)]
     print(f"Refreshing similarity tables: {' '.join(cmd)}", flush=True)
@@ -291,13 +351,27 @@ def main(argv: list[str] | None = None) -> int:
         print("Vireo stores on the Dutchie side (Jane wins where both list the store):")
         print("\n".join(decisions))
     sources = [dutchie_csv] + ([vireo_csv] if vireo_csv else [])
-    for line in write_database(out, sources):
-        print(line)
+
+    # Build on a copy so the public site keeps serving the previous catalogue
+    # (and its popup tables) for the 15–20 min similarity rebuild. One
+    # os.replace at the end is the cutover.
+    staging = prepare_staging(DB_PATH)
+    published = False
+    try:
+        for line in write_database(out, sources, dest=staging):
+            print(line)
+        if not a.no_similarity:
+            refresh_similarity(dutchie_csv, vireo_csv, db=staging)
+        publish_database(staging, DB_PATH)
+        published = True
+    finally:
+        if not published:
+            staging.unlink(missing_ok=True)
+            unlink_sidecars(staging)
+
     print(f"Wrote {DB_PATH}: {len(out):,} products from {out['dispensary_display'].nunique()} dispensaries "
           f"({len(dutchie) - dropped:,} Dutchie rows, {dropped:,} dropped in favour of Jane; "
           f"{0 if jane is None else len(jane):,} Jane rows)")
-    if not a.no_similarity:
-        refresh_similarity(dutchie_csv, vireo_csv)
     return 0
 
 

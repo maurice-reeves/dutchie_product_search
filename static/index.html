@@ -293,60 +293,58 @@
   .modal.product:focus { outline: none; }   /* the panel takes focus programmatically; the ring belongs on its controls */
   .product .topbar { flex: none; display: flex; justify-content: flex-end; padding: 6px 8px 0; }
   .product .topbar .close { position: static; }
-  .product .body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
+  .product .body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 18px 18px; }
   body.modal-open { overflow: hidden; }
   .product .brand { font-size: 13px; color: var(--text-muted); }
-  .product .pname { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 2px 0 6px; overflow-wrap: anywhere; }
+  .product .pname { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 2px 0 4px; overflow-wrap: anywhere; }
   .product .attrs { font-size: 13px; color: var(--text-muted); }
-  .product .current { margin-top: 18px; }
-  .product .cprice { font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .product .current { margin-top: 14px; }
+  .product .cprice { font-size: 26px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
   .product .cprice.sale { color: var(--sale); }
-  .product .cwas { font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .product .cstore { font-size: 15px; margin-top: 6px; }
+  .product .cwas { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .product .cstore { font-size: 14px; margin-top: 4px; }
   .product .cstore .sub { display: block; font-size: 13px; color: var(--text-muted); }
-  .product .visit { display: block; text-align: center; margin-top: 14px; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 15px; font-weight: 600; text-decoration: none; }
-  .product .divider { border: 0; border-top: 1px solid var(--border); margin: 22px 0 18px; }
-  .product h3 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
-  .product .caption { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+  .product .visit { display: block; text-align: center; margin-top: 12px; padding: 9px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 14px; font-weight: 600; text-decoration: none; }
+  .product .divider { border: 0; border-top: 1px solid var(--border); margin: 16px 0 14px; }
+  .product h3 { margin: 0 0 2px; font-size: 20px; font-weight: 700; }
+  .product .caption { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
   .product .empty-note, .product .loading { padding: 24px 20px; color: var(--text-muted); text-align: center; }
   /* The graph: a thin track with the selected range emphasised, a dot per
      selected price, a dashed line for the average and a triangle for this
      listing. Everything is positioned by value on one linear scale. */
-  .graph { position: relative; height: 132px; margin: 6px 6px 4px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
-  .graph .lbl { position: absolute; white-space: nowrap; transform: translateX(-50%); }
+  .graph { position: relative; height: 116px; margin: 4px 6px 0; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .graph .lbl { position: absolute; white-space: nowrap; transform: translateX(-50%); font-weight: 600; }
+  .graph .lbl em { font-style: normal; font-weight: 500; color: var(--text-muted); }
   .graph .lbl.l, .graph .lbl.r { transform: none; }
   .graph .this-lbl { top: 0; font-weight: 600; }
-  .graph .track { position: absolute; left: 0; right: 0; top: 60px; height: 5px; border-radius: 3px; background: var(--border); }
-  .graph .range { position: absolute; top: 60px; height: 5px; background: var(--text-muted); }
-  .graph .dot { position: absolute; top: 56px; width: 13px; height: 13px; border-radius: 50%; background: var(--text); transform: translateX(-50%); }
-  .graph .avg { position: absolute; top: 34px; height: 56px; border-left: 3px dotted var(--text); transform: translateX(-1px); }
-  .graph .this { position: absolute; top: 36px; height: 50px; border-left: 3px solid var(--accent); transform: translateX(-1px); }
+  .graph .track { position: absolute; left: 0; right: 0; top: 50px; height: 5px; border-radius: 3px; background: var(--border); }
+  .graph .range { position: absolute; top: 50px; height: 5px; background: var(--text-muted); }
+  .graph .dot { position: absolute; top: 46px; width: 13px; height: 13px; border-radius: 50%; background: var(--text); transform: translateX(-50%); }
+  .graph .avg { position: absolute; top: 26px; height: 52px; border-left: 3px dotted var(--text); transform: translateX(-1px); }
+  .graph .this { position: absolute; top: 28px; height: 46px; border-left: 3px solid var(--accent); transform: translateX(-1px); }
   .graph .this::before { content: ""; position: absolute; top: -10px; left: -7px; border: 6px solid transparent; border-top: 10px solid var(--accent); border-bottom: 0; }
-  .graph .end { top: 90px; font-weight: 600; }
-  .graph .avg-lbl { top: 112px; font-weight: 600; }
+  .graph .end { top: 78px; }
+  .graph .avg-lbl { top: 98px; }
   .graph .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 14px; color: var(--text-muted); padding: 10px 0 14px; border-bottom: 1px solid var(--border); }
-  .summary b { display: block; font-size: 26px; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .summary div:nth-child(2) { text-align: center; }
-  .summary div:last-child { text-align: right; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* The list: checkbox | store + description | price */
-  .rows { list-style: none; margin: 0; padding: 0; }
+  .rows { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--border); }
   .rows li { border-bottom: 1px solid var(--border); }
-  .rows label { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 0; cursor: pointer; }
+  .rows label { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; cursor: pointer; }
   /* Native checkboxes drawn to match the mock-up: rounded, mint when ticked. */
-  .rows input { appearance: none; -webkit-appearance: none; width: 26px; height: 26px; margin: 0; border: 2px solid var(--text-muted); border-radius: 8px; background: transparent; position: relative; cursor: pointer; }
+  .rows input { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; margin: 0; border: 2px solid var(--text-muted); border-radius: 8px; background: transparent; position: relative; cursor: pointer; }
   .rows input:checked { background: var(--accent); border-color: var(--accent); }
-  .rows input:checked::after { content: ""; position: absolute; left: 8px; top: 3px; width: 6px; height: 12px; border: solid #0b0c0d; border-width: 0 3px 3px 0; transform: rotate(45deg); }
+  .rows input:checked::after { content: ""; position: absolute; left: 6px; top: 2px; width: 5px; height: 10px; border: solid #0b0c0d; border-width: 0 3px 3px 0; transform: rotate(45deg); }
   .rows input:disabled { opacity: .35; cursor: default; }
   .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .rows .store { overflow-wrap: anywhere; font-size: 17px; font-weight: 600; }
-  .rows .desc { overflow-wrap: anywhere; display: block; font-size: 14px; color: var(--text-muted); margin-top: 4px; }
-  .rows .price { text-align: right; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rows .store { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; }
+  .rows .desc { overflow-wrap: anywhere; display: block; font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .rows .price { text-align: right; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .rows .price.sale { color: var(--sale); }
-  .rows .price small { display: block; font-size: 14px; font-weight: 400; color: var(--text-muted); margin-top: 4px; }
+  .rows .price small { display: block; font-size: 13px; font-weight: 400; color: var(--text-muted); margin-top: 3px; }
   .rows .price.na { font-size: 13px; font-weight: 400; color: var(--text-muted); }
   .rows li.off .price, .rows li.off .price.sale { color: var(--text-muted); }
-  @media (max-width: 400px) { .summary b { font-size: 20px; } .product .body { padding: 16px; } .product .pname { font-size: 21px; } }
+  @media (max-width: 400px) { .product .body { padding: 0 14px 14px; } .product .pname { font-size: 19px; } }
 </style>
 </head>
 <body>
@@ -769,7 +767,7 @@ function renderGraph(rows, mine) {
     cap.textContent = 'No prices selected';
     graph.innerHTML = '<div class="empty">Select a listing to compare prices.</div>';
     graph.setAttribute('aria-label', 'No prices selected.');
-    sum.innerHTML = ['Min', 'Average', 'Max'].map(k => `<div>${k}<b>—</b></div>`).join('');
+    sum.textContent = '';
     return;
   }
   cap.textContent = `Average of ${stats.n} selected price${stats.n === 1 ? '' : 's'} · ${stats.sales ? 'Listed sales included' : 'Regular prices'}`;
@@ -777,24 +775,28 @@ function renderGraph(rows, mine) {
   let lo = Math.min(stats.min, ref ?? stats.min), hi = Math.max(stats.max, ref ?? stats.max);
   if (hi === lo) { const pad = Math.max(50, Math.round(lo * 0.05)); lo -= pad; hi += pad; }
   const pos = c => (c - lo) / (hi - lo) * 100;
-  // Labels near the edges anchor inward so nothing is clipped.
-  const at = (c, cls) => { const x = pos(c); return x < 14 ? `class="lbl l ${cls}" style="left:${x}%"` : x > 86 ? `class="lbl r ${cls}" style="right:${100 - x}%"` : `class="lbl ${cls}" style="left:${x}%"`; };
+  // Labels near the edges anchor inward so nothing is clipped; `edge` is how
+  // close (in %) a label's centre may get before it flips to an edge anchor.
+  const at = (c, cls, edge = 14) => { const x = pos(c); return x < edge ? `class="lbl l ${cls}" style="left:${x}%"` : x > 100 - edge ? `class="lbl r ${cls}" style="right:${100 - x}%"` : `class="lbl ${cls}" style="left:${x}%"`; };
+  const lbl = (word, c) => `<em>${word}</em> ${money(c)}`;
   let html = `<div class="track"></div><div class="range" style="left:${pos(stats.min)}%;width:${pos(stats.max) - pos(stats.min)}%"></div>`;
   // Only the ends of the selected range get a dot; the individual prices
   // are in the list below, and a dot per row just clutters the line.
   html += `<i class="dot" style="left:${pos(stats.min)}%"></i><i class="dot" style="left:${pos(stats.max)}%"></i>`;
-  html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>Avg</span>`;
+  html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>${lbl('Avg', Math.round(stats.avg))}</span>`;
   if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
-  // Close endpoints share too little space for two labels; the summary
-  // always shows their exact values below the graph.
+  // Min and Max sit under their dots. When the range is too narrow for two
+  // labels they share one, centred on it (a single price reads "Min · Max").
   if (pos(stats.max) - pos(stats.min) > 35) {
-    html += `<span ${at(stats.min, 'end')}>Min</span>`;
-    html += `<span ${at(stats.max, 'end')}>Max</span>`;
+    html += `<span ${at(stats.min, 'end')}>${lbl('Min', stats.min)}</span><span ${at(stats.max, 'end')}>${lbl('Max', stats.max)}</span>`;
+  } else {
+    const text = stats.min === stats.max ? lbl('Min · Max', stats.min) : `${lbl('Min', stats.min)} · ${lbl('Max', stats.max)}`;
+    html += `<span ${at((stats.min + stats.max) / 2, 'end', 28)}>${text}</span>`;
   }
   graph.innerHTML = html;
   graph.setAttribute('aria-label', `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.` +
     (ref != null ? ` This listing ${money(ref)}.` : ''));
-  sum.innerHTML = `<div>Min<b>${money(stats.min)}</b></div><div>Average<b>${money(Math.round(stats.avg))}</b></div><div>Max<b>${money(stats.max)}</b></div>`;
+  sum.textContent = `Minimum ${money(stats.min)}, average ${money(Math.round(stats.avg))}, maximum ${money(stats.max)}.`;
 }
 
 function rowHTML(r) {
@@ -825,7 +827,7 @@ function renderProduct() {
     <h3>Compare prices</h3>
     <div aria-live="polite"><div class="caption" id="cmpCaption"></div></div>
     <div class="graph" id="cmpGraph" role="img"></div>
-    <div class="summary" id="cmpSummary" aria-live="polite"></div>
+    <div class="sr-only" id="cmpSummary" aria-live="polite"></div>
     <ul class="rows" id="cmpRows">${productRows.map(rowHTML).join('')}</ul>`;
   el('productBody').innerHTML = html;
   renderGraph(productRows, mine);

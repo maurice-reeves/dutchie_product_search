@@ -74,6 +74,11 @@
     padding: 9px 12px;
     font-size: 14px;
   }
+  /* iOS Safari zooms the page into any focused field whose text is under
+     16px. Touch screens get 16px controls; desktop keeps the 14px look. */
+  @media (hover: none) and (pointer: coarse) {
+    input[type="text"], select, input[type="number"] { font-size: 16px; }
+  }
   /* Search box and the button pair each take a full row, so the two buttons
      together span exactly the width of the search bar. */
   #q { flex: 1 1 100%; min-width: 0; }

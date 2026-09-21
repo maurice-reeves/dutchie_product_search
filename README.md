@@ -378,7 +378,7 @@ The source does not include sale-eligibility conditions; listed specials are
 not inferred to be member or first-time-buyer deals. Zero and negative
 specials are treated as missing, not free products.
 Ticking or unticking a row recomputes everything; the row order never
-changes. The graph marks every selected price, the average (dashed) and
+changes. The graph marks the selected range (a dot at each end), the average (dashed) and
 this listing (emerald triangle, shown even when unticked, extending the
 scale if it sits outside the selected range). A similar product not sold
 in the compared size shows "Price unavailable" and cannot be ticked. The

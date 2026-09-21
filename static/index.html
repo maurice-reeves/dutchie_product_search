@@ -776,7 +776,9 @@ function renderGraph(rows, mine) {
   // Labels near the edges anchor inward so nothing is clipped.
   const at = (c, cls) => { const x = pos(c); return x < 14 ? `class="lbl l ${cls}" style="left:${x}%"` : x > 86 ? `class="lbl r ${cls}" style="right:${100 - x}%"` : `class="lbl ${cls}" style="left:${x}%"`; };
   let html = `<div class="track"></div><div class="range" style="left:${pos(stats.min)}%;width:${pos(stats.max) - pos(stats.min)}%"></div>`;
-  html += stats.prices.map(c => `<i class="dot" style="left:${pos(c)}%"></i>`).join('');
+  // Only the ends of the selected range get a dot; the individual prices
+  // are in the list below, and a dot per row just clutters the line.
+  html += `<i class="dot" style="left:${pos(stats.min)}%"></i><i class="dot" style="left:${pos(stats.max)}%"></i>`;
   html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>Avg</span>`;
   if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
   // Close endpoints share too little space for two labels; the summary

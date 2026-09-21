@@ -384,7 +384,9 @@ changes. The graph marks the selected range (a dot at each end, labelled
 with the Min and Max values, sharing one label when they are close), the
 average (dashed, labelled) and
 this listing (emerald triangle, shown even when unticked, extending the
-scale if it sits outside the selected range). A similar product not sold
+scale if it sits outside the selected range). With a single price
+selected there is no Min, Max or Avg — just the dot, priced unless it is
+this listing. A similar product not sold
 in the compared size shows "Price unavailable" and cannot be ticked. The
 data behind it is built offline by `build_similarity.py`, so the site
 itself only reads four extra tables:

@@ -7,7 +7,7 @@ filter products by name, brand, dispensary, type, weight and price —
 linking each card straight to that product on the dispensary's own menu.
 
 Clicking a card opens a price-comparison popup (same product at other
-stores, plus similar listings). Restock badges exist but are **off** by
+stores). Restock badges exist but are **off** by
 default — see [Restock tracking](#restock-tracking-off-by-default).
 
 This project is **standalone**. It only reads a CSV that `dutchie_scraper`
@@ -373,8 +373,11 @@ header (brand, full name, one attributes line), the listing's own price —
 the sale price when the menu shows one, regular price struck through
 beneath — a "View dispensary" button, then **one price comparison**: a
 horizontal graph and a checkable list of the same product at other
-dispensaries (ticked by default) and the nearest similar products
-(unticked), all at the size being compared. Every row leads with its
+dispensaries (ticked by default), all at the size being compared. The
+nearest *similar* products are still computed and returned by the API
+but not listed since 2026-09-21 — only the same product elsewhere is a
+price comparison; the popup code keeps the `similar` row kind so they can
+come back. Every row leads with its
 brand, so a same-named product from another maker is not mistaken for a
 match, and carries its type and subcategory on a third line for the same
 reason. Each
@@ -391,8 +394,8 @@ average (dashed, labelled) and
 this listing (emerald triangle, shown even when unticked, extending the
 scale if it sits outside the selected range). With a single price
 selected there is no Min, Max or Avg — just the dot, priced unless it is
-this listing. A similar product not sold
-in the compared size shows "Price unavailable" and cannot be ticked. The
+this listing. (When similar products are listed, one not sold in the
+compared size shows "Price unavailable" and cannot be ticked.) The
 data behind it is built offline by `build_similarity.py`, so the site
 itself only reads four extra tables:
 

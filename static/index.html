@@ -735,12 +735,11 @@ function buildRows(d) {
   const describe = x => [x.brand_name, x.display_name || x.name].filter(Boolean).join(' · ');
   const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: describe(o), cat: categoryText(o),
     price: o.id === p.id && Object.hasOwn(p, 'sale_price') ? applicablePrice(p.price, p.sale_price) : applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
-  for (const s of d.similar) {
-    if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
-    const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
-    rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
-      desc: describe(s), cat: categoryText(s), price, checked: price != null && productChoices.on.has(s.id) });
-  }
+  // Similar products (d.similar, the embedding neighbours) are not listed
+  // for now: only the same product at other stores is a price comparison.
+  // Re-enable by pushing them here as kind 'similar' (unticked by default;
+  // productChoices.on remembers opt-ins) -- rowHTML and the tick handler
+  // still understand that kind.
   // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
   return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));
 }

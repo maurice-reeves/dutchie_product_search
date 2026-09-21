@@ -313,6 +313,8 @@
      selected price, a dashed line for the average and a triangle for this
      listing. Everything is positioned by value on one linear scale. */
   .graph { position: relative; height: 116px; margin: 4px 6px 0; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .graph.one { height: 98px; }          /* one price: no Avg row */
+  .graph.one.bare { height: 72px; }     /* ...and no price label either, it is this listing's */
   .graph .lbl { position: absolute; white-space: nowrap; transform: translateX(-50%); font-weight: 600; }
   .graph .lbl em { font-style: normal; font-weight: 500; color: var(--text-muted); }
   .graph .lbl.l, .graph .lbl.r { transform: none; }
@@ -766,11 +768,13 @@ function renderGraph(rows, mine) {
   if (!stats) {
     cap.textContent = 'No prices selected';
     graph.innerHTML = '<div class="empty">Select a listing to compare prices.</div>';
+    graph.classList.remove('one', 'bare');
     graph.setAttribute('aria-label', 'No prices selected.');
     sum.textContent = '';
     return;
   }
-  cap.textContent = `Average of ${stats.n} selected price${stats.n === 1 ? '' : 's'} · ${stats.sales ? 'Listed sales included' : 'Regular prices'}`;
+  const one = stats.n === 1;                                                  // one price has no min, max or average
+  cap.textContent = `${one ? '1 selected price' : `Average of ${stats.n} selected prices`} · ${stats.sales ? 'Listed sales included' : 'Regular prices'}`;
   // One linear scale over every value drawn; padded when they all coincide.
   let lo = Math.min(stats.min, ref ?? stats.min), hi = Math.max(stats.max, ref ?? stats.max);
   if (hi === lo) { const pad = Math.max(50, Math.round(lo * 0.05)); lo -= pad; hi += pad; }
@@ -783,20 +787,27 @@ function renderGraph(rows, mine) {
   // Only the ends of the selected range get a dot; the individual prices
   // are in the list below, and a dot per row just clutters the line.
   html += `<i class="dot" style="left:${pos(stats.min)}%"></i><i class="dot" style="left:${pos(stats.max)}%"></i>`;
-  html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>${lbl('Avg', Math.round(stats.avg))}</span>`;
+  if (!one) html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>${lbl('Avg', Math.round(stats.avg))}</span>`;
   if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
-  // Min and Max sit under their dots. When the range is too narrow for two
-  // labels they share one, centred on it (a single price reads "Min · Max").
-  if (pos(stats.max) - pos(stats.min) > 35) {
+  if (one) {
+    // Just the dot, priced only when it is not this listing (whose marker already says so).
+    if (ref !== stats.min) html += `<span ${at(stats.min, 'end')}>${money(stats.min)}</span>`;
+  } else if (pos(stats.max) - pos(stats.min) > 35) {
+    // Min and Max sit under their dots...
     html += `<span ${at(stats.min, 'end')}>${lbl('Min', stats.min)}</span><span ${at(stats.max, 'end')}>${lbl('Max', stats.max)}</span>`;
   } else {
+    // ...unless the range is too narrow for two labels; then they share one, centred on it.
     const text = stats.min === stats.max ? lbl('Min · Max', stats.min) : `${lbl('Min', stats.min)} · ${lbl('Max', stats.max)}`;
     html += `<span ${at((stats.min + stats.max) / 2, 'end', 28)}>${text}</span>`;
   }
   graph.innerHTML = html;
-  graph.setAttribute('aria-label', `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.` +
-    (ref != null ? ` This listing ${money(ref)}.` : ''));
-  sum.textContent = `Minimum ${money(stats.min)}, average ${money(Math.round(stats.avg))}, maximum ${money(stats.max)}.`;
+  // With one price there is no second label row, so the graph gives the space back.
+  graph.classList.toggle('one', one);
+  graph.classList.toggle('bare', one && ref === stats.min);
+  const summary = one ? `One selected price, ${money(stats.min)}.`
+    : `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.`;
+  graph.setAttribute('aria-label', summary + (ref != null ? ` This listing ${money(ref)}.` : ''));
+  sum.textContent = summary;
 }
 
 function rowHTML(r) {

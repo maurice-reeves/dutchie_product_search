@@ -735,7 +735,9 @@ function buildRows(d) {
     if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
     const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
     rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
-      desc: s.display_name || s.name, price, checked: price != null && productChoices.on.has(s.id) });
+      // Brand first: another store's "Pineapple" is only comparable if it is
+      // the same maker's Pineapple, and the name alone can't tell you that.
+      desc: [s.brand_name, s.display_name || s.name].filter(Boolean).join(' · '), price, checked: price != null && productChoices.on.has(s.id) });
   }
   // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
   return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));

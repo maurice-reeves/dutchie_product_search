@@ -751,11 +751,13 @@ function selectedStats(rows) {
            sales: rows.some(r => r.checked && r.price?.sale), prices: xs };
 }
 
+/* The line under the title: the card's descriptor, then type, subcategory
+   and size. No strain type and no THC -- neither helps decide between two
+   listings of the same thing, which is what this screen is for. */
 function attributes(p, g) {
   const sub = (p.product_subcategory || '').replace(/-/g, ' ');
-  const thc = /^0(\.0+)?\s*(%|mg)/.test(p.thc_display || '') ? '' : p.thc_display;   // a bare 0 is missing data, not zero potency
   const size = g ? sizeText(g) : p.weight_label;                                     // the dose for dosed products, not ".1g"
-  return [p.product_type, sub && sub[0].toUpperCase() + sub.slice(1), p.strain_type, size, thc].filter(Boolean).join(' · ');
+  return [p.display_detail, p.product_type, sub && sub[0].toUpperCase() + sub.slice(1), size].filter(Boolean).join(' · ');
 }
 
 /* Everything derived from the ticks is drawn by this one function, so the
@@ -825,7 +827,7 @@ function renderProduct() {
   const cur = mine?.price;
   let html = `
     ${p.brand_name ? `<div class="brand">${escapeHtml(p.brand_name)}</div>` : ''}
-    <h2 class="pname" id="productTitle">${escapeHtml(p.name)}</h2>
+    <h2 class="pname" id="productTitle">${escapeHtml(p.display_name || p.name)}</h2>
     ${attributes(p, d.group) ? `<div class="attrs">${escapeHtml(attributes(p, d.group))}</div>` : ''}
     <div class="current">
       ${cur ? `<div class="cprice ${cur.sale ? 'sale' : ''}">${money(cur.cents)}</div>${cur.sale ? `<div class="cwas"><s>${money(cur.regular)}</s> Regular price</div>` : ''}`

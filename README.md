@@ -92,8 +92,10 @@ single-segment name is split only when its unknown words sit together at
 one end; otherwise it is shown whole rather than scrambled, and the title
 is never empty. Strain marks — `(H)`, `[I]`, `(S/I)`, a lone `H` segment,
 even a truncated `(I` — are dropped from the title: the card has no use
-for them and `strain_type` carries the fact. The listing name stays in
-`name` for search and for the popup's title. `python names.py --backfill data/products.db`
+for them and `strain_type` carries the fact. The popup uses the same
+title, with the descriptor leading its attribute line (type, subcategory,
+size — no strain type or THC there either). The listing name stays in
+`name` for search. `python names.py --backfill data/products.db`
 adds the two columns to an existing database without touching row ids.
 
 ### Database schema (`data/products.db`)

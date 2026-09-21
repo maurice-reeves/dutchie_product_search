@@ -112,14 +112,16 @@
     color: inherit;
   }
   .card:hover { border-color: var(--text-muted); }
-  .card-brand { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
-  /* Two explicit rows: name | price, then attributes | size, so the size
-     always shares a line with the attributes whatever wraps above. */
-  .card-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: baseline; }
-  .card-name { grid-column: 1; grid-row: 1; font-size: 18px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-  .card-price-cell { grid-column: 2; grid-row: 1; text-align: right; }
-  .card-attrs { grid-column: 1; grid-row: 2; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
-  .card-size { grid-column: 2; grid-row: 2; text-align: right; font-size: 13px; color: var(--text-muted); line-height: 1.4; white-space: nowrap; }
+  /* Three explicit rows, each pairing a left and a right item on one
+     baseline: brand | sale line, name | price, attributes | size. A row
+     with nothing in it (no brand, no sale) takes no space. */
+  .card-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline; }
+  .card-brand { grid-column: 1; grid-row: 1; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .card-sale-line { grid-column: 2; grid-row: 1; text-align: right; margin-bottom: 4px; }
+  .card-name { grid-column: 1; grid-row: 2; font-size: 18px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .card-price-cell { grid-column: 2; grid-row: 2; text-align: right; }
+  .card-attrs { grid-column: 1; grid-row: 3; margin-top: 4px; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+  .card-size { grid-column: 2; grid-row: 3; margin-top: 4px; text-align: right; font-size: 13px; color: var(--text-muted); line-height: 1.4; white-space: nowrap; }
   .card-price { font-size: 22px; font-weight: 600; color: var(--accent); line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .card-price.sale { color: var(--sale); }
   .card-was { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -491,13 +493,11 @@ function cardHTML(p) {
   return `
     <a class="card" href="#p=${p.id}" data-id="${p.id}">
       ${restockBadge(p)}
-      ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
       <div class="card-main">
+        ${p.brand_name ? `<div class="card-brand">${escapeHtml(p.brand_name)}</div>` : ''}
+        ${price?.sale ? `<div class="card-sale-line">Sale · ${money(price.cents)}</div>` : ''}
         <div class="card-name">${escapeHtml(p.display_name || p.name)}</div>
-        <div class="card-price-cell">${price ? (price.sale
-            ? `<div class="card-sale-line">Sale · ${money(price.cents)}</div><div class="card-price">${money(price.regular)}</div>`
-            : `<div class="card-price">${money(price.cents)}</div>`)
-          : `<div class="card-was">Price unavailable</div>`}</div>
+        <div class="card-price-cell">${price ? `<div class="card-price">${money(price.regular)}</div>` : `<div class="card-was">Price unavailable</div>`}</div>
         ${attrs ? `<div class="card-attrs">${escapeHtml(attrs)}</div>` : ''}
         ${p.weight_label ? `<div class="card-size">${escapeHtml(p.weight_label)}</div>` : ''}
       </div>

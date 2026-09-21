@@ -48,7 +48,7 @@ vireo_products*.csv    ─┘   one products table   products + FTS5            
 | `cName` + `dispensary` | `product_url`    | `https://dutchie.com/dispensary/<slug>/product/<cName>` — the singular `/product/` resolves, the plural `/products/` does not |
 | `id`                 | `product_id`       | Dutchie's product id; what lets a product be followed across daily snapshots |
 | `Prices`             | `price`            | coerced to a number; rows with no parseable price are dropped   |
-| `recSpecialPrices`   | `sale_price`       | the menu's special price for the same option, kept only when it undercuts `price`. Cards and the popup show it as the *applicable price* (regular price struck through beneath) and the price sorts order by `COALESCE(sale_price, price)`; Jane rows have none |
+| `recSpecialPrices`   | `sale_price`       | the menu's special price for the same option, kept only when it undercuts `price`. Cards and the popup show it as the *applicable price* (regular price struck through beneath) and the price sorts order by the same positive-discount rule; Jane rows have none |
 | `createdAt`          | `created_at`       | parsed to a timestamp (drives "Newest first" + "Added" labels)  |
 | `type`               | `product_type`     | null → `Uncategorized`                                          |
 
@@ -64,6 +64,10 @@ dispensary beside the "Added" date — *today*, *yesterday*, or a compact
 date, from the same `created_at` the "Newest first" sort uses. Default
 sort is newest; 30 cards per page. The results line reads
 "Showing 30 of 86,781 products".
+
+After updating, run the normal import to populate `products.sale_price`.
+Price sorting and filtering also work with an older database before that
+refresh, using regular prices when the column is absent.
 
 #### Card titles (`display_name`, `display_detail`)
 
@@ -367,9 +371,12 @@ beneath — a "View dispensary" button, then **one price comparison**: a
 horizontal graph and a checkable list of the same product at other
 dispensaries (ticked by default) and the nearest similar products
 (unticked), all at the size being compared. Each
-row shows its *applicable* price — an unconditional sale price if the menu
+row shows its *applicable* price — a positive listed sale price below regular price if the menu
 has one, else the regular price — and that same number is what the graph
-and the Min / Average / Max summary use, so the two can never disagree.
+and the Min / Average / Max summary use, so the displayed values can be reconciled directly.
+The source does not include sale-eligibility conditions; listed specials are
+not inferred to be member or first-time-buyer deals. Zero and negative
+specials are treated as missing, not free products.
 Ticking or unticking a row recomputes everything; the row order never
 changes. The graph marks every selected price, the average (dashed) and
 this listing (emerald triangle, shown even when unticked, extending the

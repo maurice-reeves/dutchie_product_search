@@ -49,7 +49,8 @@
     padding: 16px;
   }
   /* One centred column: the header's contents and the feed share a width. */
-  header > *, main { max-width: 680px; margin-left: auto; margin-right: auto; }
+  header > * { max-width: 648px; margin-left: auto; margin-right: auto; }
+  main { max-width: 680px; margin-left: auto; margin-right: auto; }
   h1 {
     margin: 0 0 14px;
     font-size: 23px;
@@ -126,7 +127,7 @@
   .card-price.sale { color: var(--sale); }
   .card-was { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .card-footer { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 12px; font-size: 13px; color: var(--text-muted); }
-  .card-dispensary { display: flex; align-items: flex-start; gap: 5px; min-width: 0; }
+  .card-dispensary { overflow-wrap: anywhere; display: flex; align-items: flex-start; gap: 5px; min-width: 0; }
   .card-dispensary svg { flex: none; width: 13px; height: 13px; margin-top: 3px; fill: currentColor; opacity: .8; }
   .card-added { white-space: nowrap; }
   .load-more {
@@ -169,7 +170,8 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    white-space: nowrap;
+    min-width: 0;
+    white-space: normal;
   }
   .btn:focus-visible, .card:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #sortLabel::after { content: " \25BE"; color: var(--text-muted); }   /* ▾ */
@@ -221,7 +223,9 @@
     font-size: 22px;
     line-height: 1;
     cursor: pointer;
-    padding: 0 4px;
+    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
   }
   .modal .close:hover { color: var(--text); }
   .field { display: block; margin-bottom: 14px; }
@@ -290,6 +294,7 @@
   .product .topbar { flex: none; display: flex; justify-content: flex-end; padding: 6px 8px 0; }
   .product .topbar .close { position: static; }
   .product .body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
+  body.modal-open { overflow: hidden; }
   .product .brand { font-size: 13px; color: var(--text-muted); }
   .product .pname { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 2px 0 6px; overflow-wrap: anywhere; }
   .product .attrs { font-size: 13px; color: var(--text-muted); }
@@ -320,7 +325,7 @@
   .graph .end { top: 90px; font-weight: 600; }
   .graph .avg-lbl { top: 112px; font-weight: 600; }
   .graph .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .summary { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-muted); padding: 10px 0 14px; border-bottom: 1px solid var(--border); }
+  .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 14px; color: var(--text-muted); padding: 10px 0 14px; border-bottom: 1px solid var(--border); }
   .summary b { display: block; font-size: 26px; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
   .summary div:nth-child(2) { text-align: center; }
   .summary div:last-child { text-align: right; }
@@ -334,14 +339,14 @@
   .rows input:checked::after { content: ""; position: absolute; left: 8px; top: 3px; width: 6px; height: 12px; border: solid #0b0c0d; border-width: 0 3px 3px 0; transform: rotate(45deg); }
   .rows input:disabled { opacity: .35; cursor: default; }
   .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .rows .store { font-size: 17px; font-weight: 600; }
-  .rows .desc { display: block; font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+  .rows .store { overflow-wrap: anywhere; font-size: 17px; font-weight: 600; }
+  .rows .desc { overflow-wrap: anywhere; display: block; font-size: 14px; color: var(--text-muted); margin-top: 4px; }
   .rows .price { text-align: right; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .rows .price.sale { color: var(--sale); }
   .rows .price small { display: block; font-size: 14px; font-weight: 400; color: var(--text-muted); margin-top: 4px; }
   .rows .price.na { font-size: 13px; font-weight: 400; color: var(--text-muted); }
   .rows li.off .price, .rows li.off .price.sale { color: var(--text-muted); }
-  @media (max-width: 400px) { .product .body { padding: 16px; } .product .pname { font-size: 21px; } }
+  @media (max-width: 400px) { .summary b { font-size: 20px; } .product .body { padding: 16px; } .product .pname { font-size: 21px; } }
 </style>
 </head>
 <body>
@@ -510,10 +515,13 @@ function cardHTML(p) {
 const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>';
 
 function formatDate(isoString) {
-  const d = new Date(isoString.replace(' ', 'T') + 'Z');
+  const timestamp = isoString.replace(' ', 'T');
+  const d = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp) ? timestamp : timestamp + 'Z');
   if (isNaN(d)) return isoString;
   const now = new Date();
-  const days = Math.floor((now - d) / 86400000);
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const added = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = Math.round((today - added) / 86400000);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
@@ -560,6 +568,7 @@ function closeModal() {
   if (openModal.modal === 'productModal') history.replaceState(null, '', location.pathname + location.search);
   el(openModal.modal).hidden = true;
   el('backdrop').hidden = true;
+  document.body.classList.remove('modal-open');
   const btn = typeof openModal.button === 'string' ? el(openModal.button) : openModal.button;
   if (btn) { if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
   openModal = null;
@@ -569,6 +578,7 @@ function showModal(modal, button) {
   if (openModal) closeModal();
   openModal = { modal, button };
   el('backdrop').hidden = false;
+  document.body.classList.add('modal-open');
   el(modal).hidden = false;
   const btn = typeof button === 'string' ? el(button) : button;
   if (btn?.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'true');
@@ -663,7 +673,11 @@ runSearch(1, false);
 
 /* ---- Product modal: compact details, one price graph, one checkable list ---- */
 
-function cents(v) { return (v == null || v === '' || isNaN(Number(v))) ? null : Math.round(Number(v) * 100); }
+function cents(v) {
+  if (v == null || String(v).trim() === '' || !Number.isFinite(Number(v)) || Number(v) <= 0) return null;
+  const value = Math.round(Number(v) * 100);
+  return value > 0 ? value : null;
+}
 function money(c) { return '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 /* Ticks are remembered per product being compared: same-product rows start
@@ -699,9 +713,10 @@ async function openProduct(id, opener = null, push = true) {
   el('productBody').scrollTop = 0;
 }
 
-/* The one price a listing is compared at: an unconditional sale price when
-   the menu shows one, else the regular price, always at the size being
-   compared. Similar products not sold in that size have no comparable
+/* The one price a listing is compared at: a listed menu sale price when
+   supplied, else the regular price, always at the size being
+   compared. The source does not provide eligibility terms.
+   Similar products not sold in that size have no comparable
    price and cannot be ticked. Cents throughout; rounding happens only when
    a number is displayed. */
 function applicablePrice(regular, sale) {
@@ -712,10 +727,10 @@ function applicablePrice(regular, sale) {
 
 function buildRows(d) {
   const p = d.product, g = d.group;
-  const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, display_name: p.display_name, dispensary_display: p.dispensary_display,
-    price: p.price, sale_price: p.sale_price, confidence: 1 }];
+  const same = d.offers.slice();
+  if (!same.some(o => o.id === p.id)) same.push({ ...p, is_this: true, confidence: 1 });
   const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.display_name || o.name,
-    price: applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
+    price: o.id === p.id && Object.hasOwn(p, 'sale_price') ? applicablePrice(p.price, p.sale_price) : applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {
     if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
     const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
@@ -753,7 +768,7 @@ function renderGraph(rows, mine) {
     sum.innerHTML = ['Min', 'Average', 'Max'].map(k => `<div>${k}<b>—</b></div>`).join('');
     return;
   }
-  cap.textContent = `Average of ${stats.n} selected price${stats.n === 1 ? '' : 's'} · ${stats.sales ? 'Sales included' : 'Regular prices'}`;
+  cap.textContent = `Average of ${stats.n} selected price${stats.n === 1 ? '' : 's'} · ${stats.sales ? 'Listed sales included' : 'Regular prices'}`;
   // One linear scale over every value drawn; padded when they all coincide.
   let lo = Math.min(stats.min, ref ?? stats.min), hi = Math.max(stats.max, ref ?? stats.max);
   if (hi === lo) { const pad = Math.max(50, Math.round(lo * 0.05)); lo -= pad; hi += pad; }
@@ -764,8 +779,12 @@ function renderGraph(rows, mine) {
   html += stats.prices.map(c => `<i class="dot" style="left:${pos(c)}%"></i>`).join('');
   html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>Avg</span>`;
   if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
-  html += `<span ${at(stats.min, 'end')}>Min</span>`;
-  if (stats.max !== stats.min) html += `<span ${at(stats.max, 'end')}>Max</span>`;
+  // Close endpoints share too little space for two labels; the summary
+  // always shows their exact values below the graph.
+  if (pos(stats.max) - pos(stats.min) > 35) {
+    html += `<span ${at(stats.min, 'end')}>Min</span>`;
+    html += `<span ${at(stats.max, 'end')}>Max</span>`;
+  }
   graph.innerHTML = html;
   graph.setAttribute('aria-label', `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.` +
     (ref != null ? ` This listing ${money(ref)}.` : ''));
@@ -792,7 +811,7 @@ function renderProduct() {
     ${attributes(p, d.group) ? `<div class="attrs">${escapeHtml(attributes(p, d.group))}</div>` : ''}
     <div class="current">
       ${cur ? `<div class="cprice ${cur.sale ? 'sale' : ''}">${money(cur.cents)}</div>${cur.sale ? `<div class="cwas"><s>${money(cur.regular)}</s> Regular price</div>` : ''}`
-            : `<div class="cprice">${money(cents(p.price) ?? 0)}</div>`}
+            : `<div class="cwas">Price unavailable</div>`}
       <div class="cstore">${escapeHtml(p.dispensary_display)}</div>
       <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>
     </div>

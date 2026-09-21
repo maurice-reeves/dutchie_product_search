@@ -141,8 +141,9 @@ def dutchie_products(csv_path: Path) -> pd.DataFrame:
     # The menu's special price for the same (first) option, kept only when it
     # really undercuts the regular price. It is the "applicable price" the
     # cards and the popup show, and what the price sorts use.
-    df["sale_price"] = pd.to_numeric(df["recSpecialPrices"].apply(first_in_list), errors="coerce")
-    df.loc[~(df["sale_price"] < df["price"]), "sale_price"] = None
+    specials = df.get("recSpecialPrices", pd.Series(index=df.index, dtype=object))
+    df["sale_price"] = pd.to_numeric(specials.apply(first_in_list), errors="coerce")
+    df.loc[~((df["sale_price"] > 0) & (df["sale_price"] < df["price"])), "sale_price"] = None
 
     df["created_at"] = pd.to_datetime(df["createdAt"], errors="coerce")
 

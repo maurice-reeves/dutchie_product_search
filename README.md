@@ -47,6 +47,7 @@ vireo_products*.csv    ─┘   one products table   products + FTS5            
 | `Options`            | `weight_label`     | Dutchie's own label (`3.5g`, `1/8oz`), falling back to formatting `weight_mg` |
 | `cName` + `dispensary` | `product_url`    | `https://dutchie.com/dispensary/<slug>/product/<cName>` — the singular `/product/` resolves, the plural `/products/` does not |
 | `id`                 | `product_id`       | Dutchie's product id; what lets a product be followed across daily snapshots |
+| `id` + `dispensary`  | —                  | one row per listing: a product the scraper saw on two menu pages (Dutchie's page order drifts between requests; ~2.5% of rows before the scraper deduped them) is kept once |
 | `Prices`             | `price`            | coerced to a number; rows with no parseable price are dropped   |
 | `recSpecialPrices`   | `sale_price`       | the menu's special price for the same option, kept only when it undercuts `price`. Cards and the popup show it as the *applicable price* (regular price struck through beneath) and the price sorts order by the same positive-discount rule; Jane rows have none |
 | `createdAt`          | `created_at`       | parsed to a timestamp (drives "Newest first" + "Added" labels)  |

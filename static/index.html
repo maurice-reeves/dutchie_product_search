@@ -277,10 +277,15 @@
 
   /* ---- Product popup ---- */
   /* ---- Product modal: compact header, one price graph, one checkable list ---- */
-  .modal.product { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border-radius: 12px; }
+  /* Sized with the dynamic viewport height: on iOS Safari 100vh includes the
+     space behind the URL bar, which pushed the top of the modal -- and the
+     close button with it -- off screen. The close button lives in its own
+     non-scrolling bar so it is always reachable; only the body scrolls. */
+  .modal.product { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); padding: 0; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
   .modal.product:focus { outline: none; }   /* the panel takes focus programmatically; the ring belongs on its controls */
-  .product .body { padding: 20px; position: relative; }
-  .product .close { position: absolute; top: 12px; right: 12px; }
+  .product .topbar { flex: none; display: flex; justify-content: flex-end; padding: 6px 8px 0; }
+  .product .topbar .close { position: static; }
+  .product .body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px 20px; }
   .product .pimg { display: block; width: 120px; height: 120px; object-fit: contain; margin: 4px auto 14px; border-radius: 8px; background: #f4f4f2; }
   .product .brand { font-size: 13px; color: var(--text-muted); }
   .product .pname { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 2px 0 6px; overflow-wrap: anywhere; }
@@ -294,44 +299,46 @@
   .product .cstore .sub { display: block; font-size: 13px; color: var(--text-muted); }
   .product .visit { display: block; text-align: center; margin-top: 14px; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 15px; font-weight: 600; text-decoration: none; }
   .product .divider { border: 0; border-top: 1px solid var(--border); margin: 22px 0 18px; }
-  .product h3 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+  .product h3 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
   .product .caption { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
   .product .empty-note, .product .loading { padding: 24px 20px; color: var(--text-muted); text-align: center; }
   /* The graph: a thin track with the selected range emphasised, a dot per
      selected price, a dashed line for the average and a triangle for this
      listing. Everything is positioned by value on one linear scale. */
-  .graph { position: relative; height: 130px; margin: 6px 0 4px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .graph { position: relative; height: 132px; margin: 6px 6px 4px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
   .graph .lbl { position: absolute; white-space: nowrap; transform: translateX(-50%); }
   .graph .lbl.l, .graph .lbl.r { transform: none; }
-  .graph .this-lbl { top: 0; color: var(--accent); font-weight: 600; }
-  .graph .avg-lbl { top: 22px; }
-  .graph .track { position: absolute; left: 0; right: 0; top: 68px; height: 4px; border-radius: 2px; background: var(--border); }
-  .graph .range { position: absolute; top: 68px; height: 4px; background: var(--text-muted); opacity: .7; }
-  .graph .dot { position: absolute; top: 65px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); transform: translateX(-50%); }
-  .graph .avg { position: absolute; top: 44px; height: 50px; border-left: 2px dashed var(--text-muted); transform: translateX(-1px); }
-  .graph .this { position: absolute; top: 46px; height: 46px; border-left: 2px solid var(--accent); transform: translateX(-1px); }
-  .graph .this::before { content: ""; position: absolute; top: -8px; left: -6px; border: 5px solid transparent; border-top: 8px solid var(--accent); border-bottom: 0; }
-  .graph .end { top: 84px; }
+  .graph .this-lbl { top: 0; font-weight: 600; }
+  .graph .track { position: absolute; left: 0; right: 0; top: 60px; height: 5px; border-radius: 3px; background: var(--border); }
+  .graph .range { position: absolute; top: 60px; height: 5px; background: var(--text-muted); }
+  .graph .dot { position: absolute; top: 56px; width: 13px; height: 13px; border-radius: 50%; background: var(--text); transform: translateX(-50%); }
+  .graph .avg { position: absolute; top: 34px; height: 56px; border-left: 3px dotted var(--text); transform: translateX(-1px); }
+  .graph .this { position: absolute; top: 36px; height: 50px; border-left: 3px solid var(--accent); transform: translateX(-1px); }
+  .graph .this::before { content: ""; position: absolute; top: -10px; left: -7px; border: 6px solid transparent; border-top: 10px solid var(--accent); border-bottom: 0; }
+  .graph .end { top: 90px; font-weight: 600; }
+  .graph .avg-lbl { top: 112px; font-weight: 600; }
   .graph .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .summary { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); padding: 6px 0 4px; border-bottom: 1px solid var(--border); }
-  .summary b { display: block; font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .summary { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-muted); padding: 10px 0 14px; border-bottom: 1px solid var(--border); }
+  .summary b { display: block; font-size: 26px; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
   .summary div:nth-child(2) { text-align: center; }
   .summary div:last-child { text-align: right; }
   /* The list: checkbox | store + description | price */
   .rows { list-style: none; margin: 0; padding: 0; }
   .rows li { border-bottom: 1px solid var(--border); }
-  .rows label { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; cursor: pointer; }
-  .rows input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-  .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .rows .store { font-size: 15px; font-weight: 600; }
-  .rows .desc { display: block; font-size: 13px; color: var(--text-muted); margin-top: 2px; }
-  .rows .sim { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 6px; white-space: nowrap; }
-  .rows .price { text-align: right; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rows label { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 0; cursor: pointer; }
+  /* Native checkboxes drawn to match the mock-up: rounded, mint when ticked. */
+  .rows input { appearance: none; -webkit-appearance: none; width: 26px; height: 26px; margin: 0; border: 2px solid var(--text-muted); border-radius: 8px; background: transparent; position: relative; cursor: pointer; }
+  .rows input:checked { background: var(--accent); border-color: var(--accent); }
+  .rows input:checked::after { content: ""; position: absolute; left: 8px; top: 3px; width: 6px; height: 12px; border: solid #0b0c0d; border-width: 0 3px 3px 0; transform: rotate(45deg); }
+  .rows input:disabled { opacity: .35; cursor: default; }
+  .rows input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .rows .store { font-size: 17px; font-weight: 600; }
+  .rows .desc { display: block; font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+  .rows .price { text-align: right; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .rows .price.sale { color: var(--sale); }
-  .rows .price small { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+  .rows .price small { display: block; font-size: 14px; font-weight: 400; color: var(--text-muted); margin-top: 4px; }
   .rows .price.na { font-size: 13px; font-weight: 400; color: var(--text-muted); }
-  .rows li.off .store, .rows li.off .price, .rows li.off .price.sale { color: var(--text-muted); }
-  .rows li.me .store::after { content: "this listing"; font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 6px; }
+  .rows li.off .price, .rows li.off .price.sale { color: var(--text-muted); }
   @media (max-width: 400px) { .product .body { padding: 16px; } .product .pname { font-size: 21px; } }
 </style>
 </head>
@@ -391,6 +398,7 @@
   </select>
 </div>
 <div class="modal product" id="productModal" role="dialog" aria-modal="true" aria-labelledby="productTitle" tabindex="-1" hidden>
+  <div class="topbar"><button class="close" data-close-product aria-label="Close">&times;</button></div>
   <div id="productBody" class="body"></div>
 </div>
 <main>
@@ -690,7 +698,7 @@ async function openProduct(id, opener = null, push = true) {
   productChoices = loadChoices(productData);
   productRows = buildRows(productData);
   renderProduct();
-  el('productModal').scrollTop = 0;
+  el('productBody').scrollTop = 0;
 }
 
 /* The one price a listing is compared at: an unconditional sale price when
@@ -706,16 +714,15 @@ function applicablePrice(regular, sale) {
 
 function buildRows(d) {
   const p = d.product, g = d.group;
-  const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, dispensary_display: p.dispensary_display,
+  const same = d.offers.length ? d.offers : [{ id: p.id, is_this: true, name: p.name, display_name: p.display_name, dispensary_display: p.dispensary_display,
     price: p.price, sale_price: p.sale_price, confidence: 1 }];
-  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.name,
+  const rows = same.map(o => ({ id: o.id, kind: 'same', is_this: !!o.is_this, store: o.dispensary_display, desc: o.display_name || o.name,
     price: applicablePrice(o.price, o.sale_price), checked: !productChoices.off.has(o.id) }));
   for (const s of d.similar) {
     if (rows.some(r => r.id === s.id)) continue;                                   // never list a product twice
     const price = g && s.price_at_size == null ? null : applicablePrice(s.price_at_size ?? s.price, s.sale_at_size);
     rows.push({ id: s.id, kind: 'similar', is_this: false, store: s.dispensary_display, score: s.score,
-      desc: (s.brand_name && !s.name.toLowerCase().startsWith(s.brand_name.toLowerCase().split(' ')[0]) ? s.brand_name + ' — ' : '') + s.name,
-      price, checked: price != null && productChoices.on.has(s.id) });
+      desc: s.display_name || s.name, price, checked: price != null && productChoices.on.has(s.id) });
   }
   // Fixed order: by applicable price, unpriced rows last. Never re-sorted on a tick.
   return rows.sort((a, b) => (a.price ? a.price.cents : Infinity) - (b.price ? b.price.cents : Infinity));
@@ -759,8 +766,8 @@ function renderGraph(rows, mine) {
   html += stats.prices.map(c => `<i class="dot" style="left:${pos(c)}%"></i>`).join('');
   html += `<div class="avg" style="left:${pos(stats.avg)}%"></div><span ${at(stats.avg, 'avg-lbl')}>Avg</span>`;
   if (ref != null) html += `<div class="this" style="left:${pos(ref)}%"></div><span ${at(ref, 'this-lbl')}>This listing ${money(ref)}</span>`;
-  html += `<span ${at(stats.min, 'end')}>${money(stats.min)}</span>`;
-  if (stats.max !== stats.min) html += `<span ${at(stats.max, 'end')}>${money(stats.max)}</span>`;
+  html += `<span ${at(stats.min, 'end')}>Min</span>`;
+  if (stats.max !== stats.min) html += `<span ${at(stats.max, 'end')}>Max</span>`;
   graph.innerHTML = html;
   graph.setAttribute('aria-label', `Selected prices from ${money(stats.min)} to ${money(stats.max)}, average ${money(Math.round(stats.avg))}.` +
     (ref != null ? ` This listing ${money(ref)}.` : ''));
@@ -769,12 +776,12 @@ function renderGraph(rows, mine) {
 
 function rowHTML(r) {
   const priceCell = !r.price ? `<span class="price na">Price unavailable</span>`
-    : r.price.sale ? `<span class="price sale">${money(r.price.cents)}<small>Sale · was <s>${money(r.price.regular)}</s></small></span>`
+    : r.price.sale ? `<span class="price sale">${money(r.price.cents)}<small><s>${money(r.price.regular)}</s> · Sale</small></span>`
     : `<span class="price">${money(r.price.cents)}</span>`;
+  const desc = [r.desc, r.kind === 'similar' ? `Similar ${Math.round(r.score * 100)}%` : '', r.is_this ? 'This listing' : ''].filter(Boolean).join(' · ');
   return `<li class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}" data-id="${r.id}">
     <label><input type="checkbox" data-id="${r.id}" ${r.checked ? 'checked' : ''} ${r.price ? '' : 'disabled'} aria-label="include ${escapeAttr(r.store)} in the comparison">
-      <span><span class="store">${escapeHtml(r.store)}${r.kind === 'similar' ? `<span class="sim">Similar · ${Math.round(r.score * 100)}%</span>` : ''}</span>
-        <span class="desc">${escapeHtml(r.desc)}</span></span>${priceCell}</label></li>`;
+      <span><span class="store">${escapeHtml(r.store)}</span><span class="desc">${escapeHtml(desc)}</span></span>${priceCell}</label></li>`;
 }
 
 function renderProduct() {
@@ -782,7 +789,6 @@ function renderProduct() {
   const mine = productRows.find(r => r.is_this);
   const cur = mine?.price;
   let html = `
-    <button class="close" data-close-product aria-label="Close">&times;</button>
     ${p.image_url ? `<img class="pimg" src="${escapeAttr(p.image_url)}" alt="">` : ''}
     ${p.brand_name ? `<div class="brand">${escapeHtml(p.brand_name)}</div>` : ''}
     <h2 class="pname" id="productTitle">${escapeHtml(p.name)}</h2>
@@ -794,7 +800,7 @@ function renderProduct() {
       <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>
     </div>
     <hr class="divider">
-    <h3>Price comparison${d.group?.size_label ? ` <span class="brand">· ${escapeHtml(sizeText(d.group))}</span>` : ''}</h3>
+    <h3>Compare prices</h3>
     <div aria-live="polite"><div class="caption" id="cmpCaption"></div></div>
     <div class="graph" id="cmpGraph" role="img"></div>
     <div class="summary" id="cmpSummary" aria-live="polite"></div>
@@ -818,7 +824,7 @@ el('productBody').addEventListener('change', e => {
   e.target.closest('li').classList.toggle('off', !row.checked);     // rows keep their place; only their emphasis changes
   renderGraph(productRows, productRows.find(r => r.is_this));
 });
-el('productBody').addEventListener('click', e => { if (e.target.closest('[data-close-product]')) closeModal(); });
+el('productModal').addEventListener('click', e => { if (e.target.closest('[data-close-product]')) closeModal(); });
 // Keep keyboard focus inside the open modal.
 el('productModal').addEventListener('keydown', e => {
   if (e.key !== 'Tab') return;

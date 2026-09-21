@@ -320,7 +320,7 @@ def product_detail(product_row: int):
         if grp and primary:
             size_key = primary["size_key"]
             rows = conn.execute("""
-                SELECT p.id, p.name, p.brand_name, p.weight_label, p.image_url, p.dispensary_display, p.dispensary_slug,
+                SELECT p.id, p.name, p.display_name, p.brand_name, p.weight_label, p.image_url, p.dispensary_display, p.dispensary_slug,
                        p.product_url, p.quantity_available, g.confidence, g.method, pp.price, pp.sale_price, pp.size_label
                 FROM product_groups g
                 JOIN products p ON p.id = g.product_row
@@ -342,7 +342,7 @@ def product_detail(product_row: int):
         size_key = out["group"]["size_key"] if out["group"] else None
         similar, seen = [], set()
         for r in conn.execute("""
-            SELECT p.id, p.name, p.brand_name, p.product_type, p.weight_label, p.thc_display, p.price,
+            SELECT p.id, p.name, p.display_name, p.brand_name, p.product_type, p.weight_label, p.thc_display, p.price,
                    p.image_url, p.dispensary_display, p.dispensary_slug, p.product_url, s.score,
                    pp.price AS price_at_size, pp.sale_price AS sale_at_size, pp.size_label AS size_label_at_size
             FROM similar_products s JOIN products p ON p.id = s.similar_row

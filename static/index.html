@@ -295,7 +295,6 @@
   .product .cprice { font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
   .product .cprice.sale { color: var(--sale); }
   .product .cwas { font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .product .cwas s { margin-right: 6px; }
   .product .cstore { font-size: 15px; margin-top: 6px; }
   .product .cstore .sub { display: block; font-size: 13px; color: var(--text-muted); }
   .product .visit { display: block; text-align: center; margin-top: 14px; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 15px; font-weight: 600; text-decoration: none; }
@@ -775,7 +774,7 @@ function renderGraph(rows, mine) {
 
 function rowHTML(r) {
   const priceCell = !r.price ? `<span class="price na">Price unavailable</span>`
-    : r.price.sale ? `<span class="price sale">${money(r.price.cents)}<small><s>${money(r.price.regular)}</s> · Sale</small></span>`
+    : r.price.sale ? `<span class="price sale">${money(r.price.cents)}<small>Sale · <s>${money(r.price.regular)}</s></small></span>`
     : `<span class="price">${money(r.price.cents)}</span>`;
   const desc = [r.desc, r.kind === 'similar' ? `Similar ${Math.round(r.score * 100)}%` : '', r.is_this ? 'This listing' : ''].filter(Boolean).join(' · ');
   return `<li class="${r.is_this ? 'me' : ''} ${r.checked ? '' : 'off'}" data-id="${r.id}">
@@ -792,7 +791,7 @@ function renderProduct() {
     <h2 class="pname" id="productTitle">${escapeHtml(p.name)}</h2>
     ${attributes(p, d.group) ? `<div class="attrs">${escapeHtml(attributes(p, d.group))}</div>` : ''}
     <div class="current">
-      ${cur ? `<div class="cprice ${cur.sale ? 'sale' : ''}">${money(cur.cents)}</div>${cur.sale ? `<div class="cwas"><s>${money(cur.regular)}</s>Regular price</div>` : ''}`
+      ${cur ? `<div class="cprice ${cur.sale ? 'sale' : ''}">${money(cur.cents)}</div>${cur.sale ? `<div class="cwas">Sale · <s>${money(cur.regular)}</s></div>` : ''}`
             : `<div class="cprice">${money(cents(p.price) ?? 0)}</div>`}
       <div class="cstore">${escapeHtml(p.dispensary_display)}</div>
       <a class="visit" href="${escapeAttr(p.product_url || p.dispensary_url)}" target="_blank" rel="noopener">View dispensary ↗</a>

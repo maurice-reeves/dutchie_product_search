@@ -46,6 +46,17 @@ from names import split_name  # noqa: E402
     ("Motorbreath #15", "Natty Rems", "Motorbreath #15", ""),
     ("Sour Peach - Sativa [10pk] (100mg)", "Smokiez", "Sour Peach", "Sativa"),
     ("Wee Joints - 5.0g - Prerolls - Hubba Bubba [I] (10PK)", "Joints", "Hubba Bubba", "Wee · Prerolls"),
+    # the listing uses a short form of the brand record's name
+    ("Green Dot | 3.5g Bud | Otoro (H)", "Green Dot Labs", "Otoro", "Bud"),
+    ("Bonanza | 1g LR Cart | Black Cherry Soda (S)", "Bonanza Cannabis", "Black Cherry Soda", "LR cart"),
+    ("Coda 100mg - Coffee and Doughnuts Milk Chocolate", "Coda Signature", "Coffee and Doughnuts Milk Chocolate", ""),
+    ("Tropical Fruit | 100MG | Joy Bombs", "Joy Bombs by Joyibles", "Tropical Fruit", ""),
+    ("Joyibles | Joybomb Fire Bomb | 10mg", "Joy Bombs by Joyibles", "Joybomb Fire Bomb", ""),
+    ("Slow Burn Farms - Pre-roll - Hybrid - Dante's Wrath", "Slow Burn Farms, LLC", "Dante's Wrath", "Pre-roll · Hybrid"),
+    ("Sugar Chunk + Butter Pecan | 1.25G Infused Preroll |Trichome Collective", "The Trichome Collective", "Sugar Chunk + Butter Pecan", "Infused preroll"),
+    ("Lick N Laid Pre-Roll by Greenfields", "Greenfields Cannabis Co.", "Lick N Laid", "Pre-roll"),
+    # ...but only at the edges: inside the name a brand word belongs to the product
+    ("Black Maple #22 | 500MG | Rosin Cartridge", "Maple Concentrates", "Black Maple #22", "Rosin cartridge"),
 ])
 def test_split_name(name, brand, title, detail):
     assert split_name(name, brand) == (title, detail)
@@ -53,5 +64,6 @@ def test_split_name(name, brand, title, detail):
 
 def test_never_returns_an_empty_title():
     assert split_name("Wyld", "Wyld") == ("Wyld", "")                # the name is just the brand
+    assert split_name("Green Dot", "Green Dot Labs") == ("Green Dot", "")   # ...or a short form of it
     assert split_name("Live Resin Cartridge", "Brand")[0] == "Live Resin Cartridge"   # all descriptor words
     assert split_name("", "x") == ("", "")                            # nothing in, nothing out

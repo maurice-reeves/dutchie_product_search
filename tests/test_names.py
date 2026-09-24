@@ -55,6 +55,8 @@ from names import split_name  # noqa: E402
     ("Slow Burn Farms - Pre-roll - Hybrid - Dante's Wrath", "Slow Burn Farms, LLC", "Dante's Wrath", "Pre-roll · Hybrid"),
     ("Sugar Chunk + Butter Pecan | 1.25G Infused Preroll |Trichome Collective", "The Trichome Collective", "Sugar Chunk + Butter Pecan", "Infused preroll"),
     ("Lick N Laid Pre-Roll by Greenfields", "Greenfields Cannabis Co.", "Lick N Laid", "Pre-roll"),
+    ("Vibes - Hemp Cones  - 40pk", "Vibes Holdings LLC", "Hemp Cones", ""),
+    ("Neon 11x Butane 320ml CA", "CA Wholesale", "Neon 11x Butane", ""),
     # ...but only at the edges: inside the name a brand word belongs to the product
     ("Black Maple #22 | 500MG | Rosin Cartridge", "Maple Concentrates", "Black Maple #22", "Rosin cartridge"),
 ])

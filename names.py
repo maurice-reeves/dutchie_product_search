@@ -73,7 +73,7 @@ def _brand_pattern(brand: str) -> re.Pattern | None:
 # "Slow Burn Farms - ...". Only ever trimmed off the end of a brand name.
 BRAND_SUFFIX = set("""llc inc co company corp corporation ltd labs lab laboratories cannabis extracts
 extract extraction edibles edible gummies collective medicinals signature products brands papers
-concentrates farm farms nurseries brand industries supply vape wax rec""".split())
+concentrates farm farms nurseries brand industries supply vape wax rec holdings wholesale county""".split())
 BRAND_SPLIT = re.compile(r"\s+(?:by|-|–|—|\|)\s+", re.I)
 
 

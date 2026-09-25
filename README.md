@@ -84,7 +84,11 @@ Hybrid Huckleberry 100mg` — so the card shows a title and a descriptor that
 | `Wyld Gummies Hybrid Huckleberry 100mg` | Huckleberry | Gummies hybrid |
 | `Black Maple #22 \| 500MG \| Rosin Cartridge` | Black Maple #22 | Rosin cartridge |
 
-The brand and any sizes are removed, the name is cut into segments at
+The brand and any sizes are removed — including the short form menus use
+for a brand record's name (`Green Dot` for *Green Dot Labs*, `Joyibles`
+for *Joy Bombs by Joyibles*), though only as a whole segment or at the
+very start or end of the name, so *Maple Concentrates* leaves
+`Black Maple #22` alone — then the name is cut into segments at
 `|`, ` - `, `:` and brackets, and the segment made mostly of words the
 matcher's vocabulary does *not* know (`build_similarity.GENERIC` plus the
 extra menu words in `names.DESCRIPTOR`) is the product; the rest is the

@@ -68,6 +68,58 @@ def _brand_pattern(brand: str) -> re.Pattern | None:
     return re.compile(rf"(?<![a-z0-9])(?:by\s+)?{body}(?![a-z0-9])", re.I)
 
 
+# Words a brand's record carries that its menu listings usually drop:
+# "Green Dot Labs" is listed as "Green Dot | ...", "Slow Burn Farms, LLC" as
+# "Slow Burn Farms - ...". Only ever trimmed off the end of a brand name.
+BRAND_SUFFIX = set("""llc inc co company corp corporation ltd labs lab laboratories cannabis extracts
+extract extraction edibles edible gummies collective medicinals signature products brands papers
+concentrates farm farms nurseries brand industries supply vape wax rec holdings wholesale county""".split())
+BRAND_SPLIT = re.compile(r"\s+(?:by|-|–|—|\|)\s+", re.I)
+
+
+def _brand_aliases(brand: str) -> set[str]:
+    """Shorter names the listing may use for this brand, as lowercase word
+    tuples joined by spaces: "Green Dot Labs" -> {"green dot"}, "Joy Bombs by
+    Joyibles" -> {"joy bombs", "joyibles"}. The full brand is not included;
+    split_name strips that anywhere already."""
+    full = " ".join(re.findall(r"[a-z0-9']+", str(brand or "").lower()))
+    out = set()
+    for part in [str(brand or "")] + BRAND_SPLIT.split(str(brand or "")):
+        words = re.findall(r"[a-z0-9']+", part.lower())
+        if words[:1] == ["the"]:
+            words = words[1:]
+        while words:
+            out.add(" ".join(words))
+            if words[-1] not in BRAND_SUFFIX:
+                break
+            words = words[:-1]
+    out.discard(full)
+    return {a for a in out if a}
+
+
+def _strip_aliases(segments: list[str], aliases: set[str]) -> list[str]:
+    """Drop a short brand name that is a whole segment, or that opens the
+    first segment or closes the last. Only at those edges: a brand word inside
+    a name ("Black Maple #22" from Maple Concentrates) is part of the product."""
+    if not aliases or not segments:
+        return segments
+    key = lambda s: " ".join(_words(s))
+    kept = [s for s in segments if key(s) not in aliases]
+    if not kept:
+        return segments
+    for i, at_start in ((0, True), (len(kept) - 1, False)):
+        words = kept[i].split()
+        for n in range(len(words) - 1, 0, -1):
+            chunk = words[:n] if at_start else words[-n:]
+            if key(" ".join(chunk)) in aliases:
+                rest = words[n:] if at_start else words[:-n]
+                if not at_start and rest[-1:] and rest[-1].lower() == "by":   # "Lick N Laid Pre-Roll by Greenfields"
+                    rest = rest[:-1]
+                kept[i] = " ".join(rest)
+                break
+    return [s for s in kept if s and _words(s)]
+
+
 def _known(word: str) -> bool:
     w = word.lower()
     if w == "x":                     # a cross ("Wilson x Peanut Butter"), sizes being gone already
@@ -115,6 +167,7 @@ def split_name(name: str, brand: str = "") -> tuple[str, str]:
     # A segment that is only a strain letter ("Cake Mix - H - Infused Blunt")
     # is a mark too; a lone "Sativa" segment is a descriptor word.
     segments = [s for s in segments if not LONE_MARK.fullmatch(s)]
+    segments = _strip_aliases(segments, _brand_aliases(brand))
 
     title, detail_parts = "", []
     if not segments:

@@ -1,4 +1,6 @@
 .venv/
+# the venv (see README: the .nosync suffix keeps iCloud from offloading it)
+.venv.nosync/
 data/*.db
 logs/
 __pycache__/

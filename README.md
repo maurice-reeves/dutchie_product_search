@@ -201,9 +201,20 @@ Requires Python 3.9+ and (for the public-tunnel feature) `cloudflared`.
 > manual steps below are for a first build or an ad-hoc refresh.
 
 ```bash
-python -m venv .venv
-./.venv/bin/pip install -r requirements.txt
+python3.12 -m venv .venv.nosync
+./.venv.nosync/bin/pip install -r requirements.txt
 ```
+
+The virtualenv is named **`.venv.nosync`**, not `.venv`, because this
+project lives under `~/Desktop`, which syncs to iCloud. When the disk runs
+low, macOS offloads files it thinks are unused to iCloud and leaves a
+`.<name>.icloud` placeholder behind; Python can't import from a placeholder.
+On 2026-09-25 it offloaded numpy's, pandas' and pydantic's compiled `.so`
+files and the nightly import died with `No module named
+'numpy._core._multiarray_umath'`. iCloud skips anything whose name ends in
+`.nosync`, so the venv always stays on disk. The launchd wrappers
+(`~/scrape_denver.sh`, `~/milehighdispos_web.sh`) use this path, so a venv
+under any other name will not be picked up.
 
 Dependencies: `pandas`, `fastapi`, `uvicorn[standard]`.
 
@@ -218,10 +229,10 @@ in the parent `Personal Projects/` directory (where both scrapers write), or
 takes explicit paths:
 
 ```bash
-./.venv/bin/python import_products.py
-./.venv/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv --vireo ../vireo_products20260918_071219.csv
-./.venv/bin/python import_products.py --no-vireo          # Dutchie stores only
-./.venv/bin/python import_products.py --no-similarity     # skip the popup tables (seconds instead of minutes)
+./.venv.nosync/bin/python import_products.py
+./.venv.nosync/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv --vireo ../vireo_products20260918_071219.csv
+./.venv.nosync/bin/python import_products.py --no-vireo          # Dutchie stores only
+./.venv.nosync/bin/python import_products.py --no-similarity     # skip the popup tables (seconds instead of minutes)
 ```
 
 It prints the row counts, the store-overlap decisions and the final DB
@@ -232,8 +243,8 @@ you have a fresh scrape. `PRODUCTS_DB=path` writes somewhere other than
 database can be built and served without touching the live one:
 
 ```bash
-PRODUCTS_DB=data/products_dev.db ./.venv/bin/python import_products.py
-PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
+PRODUCTS_DB=data/products_dev.db ./.venv.nosync/bin/python import_products.py
+PRODUCTS_DB=data/products_dev.db ./.venv.nosync/bin/uvicorn app:app --port 8001
 ```
 
 `python import_csv.py [csv]` still works and is the same as `--no-vireo`.
@@ -241,7 +252,7 @@ PRODUCTS_DB=data/products_dev.db ./.venv/bin/uvicorn app:app --port 8001
 ### 2. Start the server
 
 ```bash
-./.venv/bin/uvicorn app:app --port 8000
+./.venv.nosync/bin/uvicorn app:app --port 8000
 # add --reload while developing
 ```
 
@@ -312,7 +323,7 @@ own if they die:
 
 | Agent | Runs | Log |
 | --- | --- | --- |
-| `com.mauricereeves.milehighdispos-web` | `~/milehighdispos_web.sh` → `.venv/bin/python -m uvicorn app:app --port 8000` | `logs/web.log` |
+| `com.mauricereeves.milehighdispos-web` | `~/milehighdispos_web.sh` → `.venv.nosync/bin/python -m uvicorn app:app --port 8000` | `logs/web.log` |
 | `com.mauricereeves.milehighdispos-tunnel` | `~/milehighdispos_tunnel.sh` → `cloudflared tunnel run --token … milehighdispos` | `logs/tunnel.log` |
 
 The two shell entry points live in `$HOME`, not the repo, for the same
@@ -595,7 +606,7 @@ names.py               listing name → card title + descriptor (used by the imp
 import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
 import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
-tests/                 pytest: matching, names, atomic import, search API (./.venv/bin/python -m pytest -q tests)
+tests/                 pytest: matching, names, atomic import, search API (./.venv.nosync/bin/python -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)
 dashboard/             private /dash status page: metrics, visitors, auth
 start_search.command   double-click launcher: server + Cloudflare tunnel

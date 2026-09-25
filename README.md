@@ -19,15 +19,19 @@ already produced; it does not import or depend on that package.
 
 ```
 all_dispensaries*.csv  ─┐   import_products.py        app.py (FastAPI)         static/index.html
-(Dutchie stores)        ├──────────────────▶  data/products.db  ──────────▶  /api/*  ──────────▶  browser UI
-vireo_products*.csv    ─┘   one products table   products + FTS5            JSON search           vanilla JS
-(Vireo's Jane stores)       Jane wins overlaps   + popup tables
+(Dutchie stores)        │
+vireo_products*.csv    ─┼──────────────────▶  data/products.db  ──────────▶  /api/*  ──────────▶  browser UI
+(Vireo's Jane stores)   │   one products table   products + FTS5            JSON search           vanilla JS
+sweed_products*.csv    ─┘   Jane wins overlaps;  + popup tables
+(stores on Sweed)           Sweed hides the      (+ unlisted_products)
+                            store's Dutchie menus
 ```
 
 1. **`import_products.py`** — the nightly import. Maps each scraper's CSV to
    the same ~20 product columns (`import_csv.py` for Dutchie's ~170-column
-   CSV, `import_vireo_csv.py` for Jane's), merges them — when a store is on
-   both platforms the Jane copy wins — writes a staging copy of
+   CSV, `import_vireo_csv.py` for Jane's, `import_sweed_csv.py` for Sweed's),
+   merges them — when a store is on both platforms the Jane copy wins, and
+   a store on Sweed shows only its Sweed menu — writes a staging copy of
    `data/products.db`, records when each product was first seen, rebuilds
    the product popup's tables (`build_similarity.py`), then atomically
    replaces the live file. See [Combining the two sources](#combining-the-two-sources).
@@ -123,6 +127,11 @@ adds the two columns to an existing database without touching row ids.
   gives no creation date, so Jane rows get their `created_at` (the card's
   "Added" line, the "Newest first" sort) from here; Dutchie rows keep
   Dutchie's own `createdAt`.
+- **`unlisted_products`** — Dutchie menus of stores whose live menu is on
+  Sweed: the same columns as `products` plus `unlisted_reason` ("superseded
+  by Sweed: Krystaleaves - Denver"). Kept in case they prove useful; nothing
+  in `app.py` or `build_similarity.py` reads this table, so they can't
+  surface on the site.
 - **`product_prices`, `product_groups`, `group_prices`, `similar_products`**
   — the product popup's tables, written by `build_similarity.py`
   ([below](#product-popup-same-product-elsewhere-similar-products)).
@@ -156,6 +165,34 @@ The Vireo CSV is used only if it is from within `VIREO_MAX_AGE_DAYS` (3) of
 the Dutchie CSV — the Jane job runs right after the Dutchie one, so an older
 file means it failed that day, and the import then says so and carries on
 with Dutchie stores only.
+
+### Stores whose live menu is on Sweed
+
+Some stores run **Sweed** as their point of sale and sell through its online
+shop, so the Sweed menu is their real inventory. Some also keep Dutchie
+menus that carry only part of it. Krystaleaves (755 S Federal Blvd) had 552
+items on Sweed against 355 and 123 on its two Dutchie menus, and about 230
+of those Dutchie products were no longer on Sweed (most likely sold out).
+For these stores the site shows **only the Sweed menu**:
+
+```
+Stores whose live menu is on Sweed:
+  krystaleaves-retail (Dutchie, 355 rows) -> not listed; Krystaleaves - Denver (Sweed) is the live menu
+  krystaleaves1 (Dutchie, 123 rows) -> not listed; Krystaleaves - Denver (Sweed) is the live menu
+```
+
+Which Dutchie menus a Sweed store replaces is decided in the scraper, not
+here: `scrape_sweed_dispensaries.py`'s `STORES` maps each Sweed store id to
+Dutchie menu slugs, and the CSV carries that as `supersedesDutchie`. The
+replaced rows move to `unlisted_products` rather than being dropped. Like
+the Vireo CSV, the Sweed CSV is used only within `VIREO_MAX_AGE_DAYS` of the
+Dutchie one.
+
+`import_sweed_csv.py` holds the mapping. Each *size* is its own row
+(`product_id` is Sweed's variant id); Sweed's category becomes
+`product_type` (Cartridges → Vaporizers, Paraphernalia → Accessories, …)
+and its product type becomes the subcategory (Rosin Aio → all-in-one, Bulk
+Flower → bulk-flower, …); `product_url` is the store's own shop page.
 
 ### Restock tracking (off by default)
 
@@ -600,10 +637,11 @@ product with empty `offers` / `similar` and `group: null`.
 
 ```
 app.py                 FastAPI search API + static file mount (PRODUCTS_DB overrides the DB)
-import_products.py     nightly import: both CSVs → data/products.db, first-seen dates, popup tables
+import_products.py     nightly import: the CSVs → data/products.db, first-seen dates, popup tables
 names.py               listing name → card title + descriptor (used by the import; --backfill for an existing db)
 import_csv.py          Dutchie CSV → product rows (mapping); restock tracking parked at the bottom
 import_vireo_csv.py    Vireo/Jane CSV → product rows (mapping)
+import_sweed_csv.py    Sweed CSV → product rows (mapping) + which Dutchie menus each Sweed store supersedes
 build_similarity.py    nightly: per-size prices, same-product groups, similar products (default python3)
 tests/                 pytest: matching, names, atomic import, search API (./.venv/bin/python -m pytest -q tests)
 backfill_snapshots.py  load snapshot history from older CSVs (one-off)

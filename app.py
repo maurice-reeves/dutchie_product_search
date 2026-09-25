@@ -1,7 +1,7 @@
 """Search API + static frontend for scraped Dutchie product data.
 
 Run with:
-    ./.venv.nosync/bin/uvicorn app:app --reload --port 8000
+    ./.venv/bin/uvicorn app:app --reload --port 8000
 Then open http://127.0.0.1:8000
 """
 import os

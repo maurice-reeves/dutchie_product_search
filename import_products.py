@@ -2,10 +2,10 @@
 """Build the search database from both scrapers' CSVs: Dutchie stores plus
 Vireo's Jane stores, in one products table.
 
-    ./.venv.nosync/bin/python import_products.py                 # newest CSV of each kind
-    ./.venv.nosync/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv \\
+    ./.venv/bin/python import_products.py                 # newest CSV of each kind
+    ./.venv/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv \\
                                           --vireo ../vireo_products20260918_071219.csv
-    ./.venv.nosync/bin/python import_products.py --no-vireo      # Dutchie only
+    ./.venv/bin/python import_products.py --no-vireo      # Dutchie only
 
 The scheduled job runs this once both scrapes have finished. What it does:
 

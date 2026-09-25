@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Build the search database from both scrapers' CSVs: Dutchie stores plus
-Vireo's Jane stores, in one products table.
+"""Build the search database from the scrapers' CSVs: Dutchie stores, Vireo's
+Jane stores and stores whose live menu is on Sweed, in one products table.
 
     ./.venv/bin/python import_products.py                 # newest CSV of each kind
     ./.venv/bin/python import_products.py --dutchie ../all_dispensaries20260918_064312.csv \\
                                           --vireo ../vireo_products20260918_071219.csv
-    ./.venv/bin/python import_products.py --no-vireo      # Dutchie only
+    ./.venv/bin/python import_products.py --no-vireo      # without the Jane stores
+    ./.venv/bin/python import_products.py --no-sweed      # without the Sweed stores
 
 The scheduled job runs this once both scrapes have finished. What it does:
 
@@ -16,6 +17,10 @@ The scheduled job runs this once both scrapes have finished. What it does:
    "Same store" is the same brand plus the same location words (TGS Wewatta
    vs "The Green Solution - Wewatta"); every drop is printed, and a Vireo
    store with no Jane counterpart is kept.
+   A store on Sweed runs Sweed as its point of sale, so its Sweed menu is
+   the live one. The Dutchie menus the Sweed CSV names for it
+   (``supersedesDutchie``) are not shown: they go to ``unlisted_products``
+   (same columns plus ``unlisted_reason``), kept in case they prove useful.
 3. Writes products, its FTS index and import_meta on a *staging* copy of the
    live database (so first_seen / snapshots survive and the public site keeps
    serving the old file), drops the popup's tables (their row ids just
@@ -49,6 +54,7 @@ from pathlib import Path
 import pandas as pd
 
 import import_csv
+import import_sweed_csv
 import import_vireo_csv
 from names import split_name
 
@@ -80,17 +86,25 @@ def csv_stamp(path: Path) -> pd.Timestamp | None:
     return pd.Timestamp(m.group(1)) if m else None
 
 
+def _recent(companion: Path | None, dutchie: Path, pattern: str, without: str) -> Path | None:
+    """Use a companion CSV only if it is from (about) the same day as the Dutchie one."""
+    if companion is None:
+        print(f"No {pattern} found -- importing without {without}.")
+        return None
+    c, d = csv_stamp(companion), csv_stamp(dutchie)
+    if c is not None and d is not None and (d - c).days > VIREO_MAX_AGE_DAYS:
+        print(f"Ignoring {companion.name}: {(d - c).days} days older than {dutchie.name} "
+              f"(limit {VIREO_MAX_AGE_DAYS}) -- importing without {without}.")
+        return None
+    return companion
+
+
 def choose_vireo(vireo: Path | None, dutchie: Path) -> Path | None:
-    """Use the Vireo CSV only if it is from (about) the same day as the Dutchie one."""
-    if vireo is None:
-        print("No vireo_products*.csv found -- importing Dutchie stores only.")
-        return None
-    v, d = csv_stamp(vireo), csv_stamp(dutchie)
-    if v is not None and d is not None and (d - v).days > VIREO_MAX_AGE_DAYS:
-        print(f"Ignoring {vireo.name}: {(d - v).days} days older than {dutchie.name} "
-              f"(limit {VIREO_MAX_AGE_DAYS}) -- importing Dutchie stores only.")
-        return None
-    return vireo
+    return _recent(vireo, dutchie, "vireo_products*.csv", "the Jane stores")
+
+
+def choose_sweed(sweed: Path | None, dutchie: Path) -> Path | None:
+    return _recent(sweed, dutchie, "sweed_products*.csv", "the Sweed stores")
 
 
 # ----------------------------------------------------------------------------- combining
@@ -153,6 +167,26 @@ def combine(dutchie: pd.DataFrame, jane: pd.DataFrame | None) -> tuple[pd.DataFr
     for col in ("created_at", "updated_at"):
         out[col] = pd.to_datetime(out[col], errors="coerce", utc=True).dt.tz_localize(None)
     return out, lines, len(dutchie) - len(kept)
+
+
+def apply_sweed(out: pd.DataFrame, sweed: pd.DataFrame | None,
+                supersedes: dict[str, str]) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Add the Sweed rows and move the Dutchie menus they supersede out of the
+    listing. Returns (listed rows, unlisted rows, lines to print)."""
+    empty = out.iloc[0:0].assign(unlisted_reason=pd.Series(dtype="string"))
+    if sweed is None or sweed.empty:
+        return out, empty, []
+    hide = out["dispensary_slug"].isin(supersedes)
+    unlisted = out[hide].copy()
+    unlisted["unlisted_reason"] = "superseded by Sweed: " + unlisted["dispensary_slug"].map(supersedes)
+    lines = []
+    for slug, store in sorted(supersedes.items()):
+        n = int((unlisted["dispensary_slug"] == slug).sum())
+        lines.append(f"  {slug} (Dutchie, {n:,} rows) -> not listed; {store} (Sweed) is the live menu")
+    listed = pd.concat([out[~hide], sweed], ignore_index=True)
+    for col in ("created_at", "updated_at"):
+        listed[col] = pd.to_datetime(listed[col], errors="coerce", utc=True).dt.tz_localize(None)
+    return listed, unlisted.reset_index(drop=True), lines
 
 
 # ----------------------------------------------------------------------------- database
@@ -236,16 +270,21 @@ def publish_database(staging: Path, live: Path) -> None:
     unlink_sidecars(staging)
 
 
-def write_database(out: pd.DataFrame, sources: list[Path], dest: Path | None = None) -> list[str]:
+def write_database(out: pd.DataFrame, sources: list[Path], dest: Path | None = None,
+                   unlisted: pd.DataFrame | None = None) -> list[str]:
     """Replace the products table and everything derived from it. Returns the
     lines to print. `dest` is the file to write (the nightly job passes a
-    staging copy so the live file stays intact until publish_database)."""
+    staging copy so the live file stays intact until publish_database).
+    `unlisted` rows (menus superseded by a store's Sweed menu) go to
+    unlisted_products, which the site never reads."""
     dest = dest or DB_PATH
     lines = []
     dest.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(dest)
     try:
         out.to_sql("products", conn, if_exists="replace", index=True, index_label="id")
+        (unlisted if unlisted is not None else out.iloc[0:0].assign(unlisted_reason=None)).to_sql(
+            "unlisted_products", conn, if_exists="replace", index=False)
         drop_similarity_tables(conn)
         conn.execute("DROP TABLE IF EXISTS products_fts")
         conn.execute("""CREATE VIRTUAL TABLE products_fts USING fts5(
@@ -331,7 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dutchie", type=Path, help="Dutchie CSV (default: newest all_dispensaries*.csv)")
     ap.add_argument("--vireo", type=Path, help="Vireo CSV (default: newest vireo_products*.csv, if recent)")
-    ap.add_argument("--no-vireo", action="store_true", help="Dutchie stores only")
+    ap.add_argument("--no-vireo", action="store_true", help="leave out the Jane stores")
+    ap.add_argument("--sweed", type=Path, help="Sweed CSV (default: newest sweed_products*.csv, if recent)")
+    ap.add_argument("--no-sweed", action="store_true", help="leave out the Sweed stores")
     ap.add_argument("--csv-dir", type=Path, default=CSV_DIR, help="where to look for the CSVs")
     ap.add_argument("--no-similarity", action="store_true", help="skip the popup tables (same as SIMILARITY_PYTHON=)")
     a = ap.parse_args(argv)
@@ -342,15 +383,23 @@ def main(argv: list[str] | None = None) -> int:
     vireo_csv = None if a.no_vireo else choose_vireo(a.vireo or newest("vireo_products*.csv", a.csv_dir), dutchie_csv)
     if vireo_csv is not None and not vireo_csv.exists():
         sys.exit(f"Vireo CSV not found: {vireo_csv}")
+    sweed_csv = None if a.no_sweed else choose_sweed(a.sweed or newest("sweed_products*.csv", a.csv_dir), dutchie_csv)
+    if sweed_csv is not None and not sweed_csv.exists():
+        sys.exit(f"Sweed CSV not found: {sweed_csv}")
 
     dutchie = import_csv.dutchie_products(dutchie_csv)
     jane = import_vireo_csv.vireo_products(vireo_csv) if vireo_csv else None
     out, decisions, dropped = combine(dutchie, jane)
+    sweed, supersedes = import_sweed_csv.sweed_products(sweed_csv) if sweed_csv else (None, {})
+    out, unlisted, sweed_lines = apply_sweed(out, sweed, supersedes)
     out["display_name"], out["display_detail"] = zip(*(split_name(n, b) for n, b in zip(out["name"], out["brand_name"])))
     if decisions:
         print("Vireo stores on the Dutchie side (Jane wins where both list the store):")
         print("\n".join(decisions))
-    sources = [dutchie_csv] + ([vireo_csv] if vireo_csv else [])
+    if sweed_lines:
+        print("Stores whose live menu is on Sweed:")
+        print("\n".join(sweed_lines))
+    sources = [dutchie_csv] + ([vireo_csv] if vireo_csv else []) + ([sweed_csv] if sweed_csv else [])
 
     # Build on a copy so the public site keeps serving the previous catalogue
     # (and its popup tables) for the 15–20 min similarity rebuild. One
@@ -358,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     staging = prepare_staging(DB_PATH)
     published = False
     try:
-        for line in write_database(out, sources, dest=staging):
+        for line in write_database(out, sources, dest=staging, unlisted=unlisted):
             print(line)
         if not a.no_similarity:
             refresh_similarity(dutchie_csv, vireo_csv, db=staging)
@@ -370,8 +419,9 @@ def main(argv: list[str] | None = None) -> int:
             unlink_sidecars(staging)
 
     print(f"Wrote {DB_PATH}: {len(out):,} products from {out['dispensary_display'].nunique()} dispensaries "
-          f"({len(dutchie) - dropped:,} Dutchie rows, {dropped:,} dropped in favour of Jane; "
-          f"{0 if jane is None else len(jane):,} Jane rows)")
+          f"({len(dutchie) - dropped - len(unlisted):,} Dutchie rows, {dropped:,} dropped in favour of Jane; "
+          f"{0 if jane is None else len(jane):,} Jane rows; {0 if sweed is None else len(sweed):,} Sweed rows, "
+          f"{len(unlisted):,} Dutchie rows not listed in favour of Sweed)")
     return 0
 
 
